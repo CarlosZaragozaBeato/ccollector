@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-expand-activities-detail
+      author: zensyra
+      changes:
+        - addColumn:
+            tableName: activities
+            columns:
+              - column:
+                  name: calories
+                  type: INTEGER
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: perceived_exertion
+                  type: DECIMAL(3,1)
+              - column:
+                  name: device_name
+                  type: VARCHAR(255)

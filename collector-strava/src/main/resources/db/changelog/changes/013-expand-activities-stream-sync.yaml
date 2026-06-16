@@ -1,0 +1,50 @@
+databaseChangeLog:
+  - changeSet:
+      id: 013-expand-activities-stream-sync
+      author: zensyra
+      changes:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              ALTER TABLE collector.activities
+                ADD COLUMN IF NOT EXISTS streams_synced_at TIMESTAMPTZ;
+
+              ALTER TABLE collector.activities
+                ADD COLUMN IF NOT EXISTS streams_sync_status VARCHAR(20);
+
+              ALTER TABLE collector.activities
+                ADD COLUMN IF NOT EXISTS streams_sync_attempts INTEGER;
+
+              ALTER TABLE collector.activities
+                ADD COLUMN IF NOT EXISTS streams_last_error TEXT;
+
+              ALTER TABLE collector.activities
+                ADD COLUMN IF NOT EXISTS streams_last_requested_at TIMESTAMPTZ;
+
+              UPDATE collector.activities
+              SET streams_sync_attempts = 0
+              WHERE streams_sync_attempts IS NULL;
+
+              ALTER TABLE collector.activities
+                ALTER COLUMN streams_sync_attempts SET DEFAULT 0;
+
+              ALTER TABLE collector.activities
+                ALTER COLUMN streams_sync_attempts SET NOT NULL;
+      rollback:
+        - dropColumn:
+            tableName: activities
+            columnName: streams_last_requested_at
+        - dropColumn:
+            tableName: activities
+            columnName: streams_last_error
+        - dropColumn:
+            tableName: activities
+            columnName: streams_sync_attempts
+        - dropColumn:
+            tableName: activities
+            columnName: streams_sync_status
+        - dropColumn:
+            tableName: activities
+            columnName: streams_synced_at

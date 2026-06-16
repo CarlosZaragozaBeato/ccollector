@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 017-ensure-composite-indexes
+      author: zensyra
+      comment: >
+        Audit follow-up: ensure critical composite indexes exist for stream sync
+        and activity detail queries. Uses IF NOT EXISTS so this changeset is
+        safe when equivalent indexes were already created in previous releases.
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE INDEX IF NOT EXISTS idx_activities_athlete_calories_date
+              ON activities (athlete_id, calories, start_date DESC);
+
+              CREATE INDEX IF NOT EXISTS idx_activities_stream_sync
+              ON activities (athlete_id, streams_sync_status, streams_sync_attempts);
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP INDEX IF EXISTS idx_activities_athlete_calories_date;
+              DROP INDEX IF EXISTS idx_activities_stream_sync;

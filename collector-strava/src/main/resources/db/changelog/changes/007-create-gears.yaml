@@ -1,0 +1,71 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-create-gears
+      author: zensyra
+      changes:
+        - createTable:
+            tableName: gears
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: strava_id
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: athlete_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: primary_gear
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: brand_name
+                  type: VARCHAR(255)
+              - column:
+                  name: model_name
+                  type: VARCHAR(255)
+              - column:
+                  name: description
+                  type: TEXT
+              - column:
+                  name: distance
+                  type: DECIMAL(12,2)
+              - column:
+                  name: retired
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: gear_type
+                  type: VARCHAR(20)
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - createIndex:
+            indexName: idx_gears_athlete_id
+            tableName: gears
+            columns:
+              - column:
+                  name: athlete_id

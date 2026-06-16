@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changes/001-create-integration-credentials.yaml
+
+  - include:
+      file: db/changelog/changes/002-create-oauth-tokens.yaml
+
+  - include:
+      file: db/changelog/db.changelog-strava.yaml
+
+  - include:
+      file: db/changelog/changes/005-create-sync-job-records.yaml
+
+  - include:
+      file: db/changelog/changes/020-repair-sync-job-records-id-default.yaml
+
+  - include:
+      file: db/changelog/changes/027-widen-encrypted-columns.yaml

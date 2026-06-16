@@ -1,0 +1,46 @@
+databaseChangeLog:
+  - changeSet:
+      id: 020-repair-sync-job-records-id-default
+      author: zensyra
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: HALT
+        - tableExists:
+            schemaName: collector
+            tableName: sync_job_records
+        - columnExists:
+            schemaName: collector
+            tableName: sync_job_records
+            columnName: id
+        - sqlCheck:
+            expectedResult: "0"
+            sql: |
+              SELECT COUNT(*)
+              FROM information_schema.columns
+              WHERE table_schema = 'collector'
+                AND table_name = 'sync_job_records'
+                AND column_name = 'id'
+                AND is_identity = 'YES'
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE SEQUENCE IF NOT EXISTS collector.sync_job_records_id_seq;
+
+              ALTER SEQUENCE collector.sync_job_records_id_seq
+                OWNED BY collector.sync_job_records.id;
+
+              ALTER TABLE collector.sync_job_records
+                ALTER COLUMN id SET DEFAULT nextval('collector.sync_job_records_id_seq');
+
+              SELECT setval(
+                'collector.sync_job_records_id_seq',
+                COALESCE((SELECT MAX(id) FROM collector.sync_job_records), 0) + 1,
+                false
+              );
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: |
+              ALTER TABLE collector.sync_job_records
+                ALTER COLUMN id DROP DEFAULT;

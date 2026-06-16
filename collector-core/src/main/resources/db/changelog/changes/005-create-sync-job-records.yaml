@@ -1,0 +1,49 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-create-sync-job-records
+      author: zensyra
+      preConditions:
+        - onFail: MARK_RAN
+        - onError: MARK_RAN
+        - not:
+            tableExists:
+              schemaName: collector
+              tableName: sync_job_records
+      changes:
+        - createTable:
+            tableName: sync_job_records
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: job_id
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: last_success_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: last_failure_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: consecutive_failures
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false

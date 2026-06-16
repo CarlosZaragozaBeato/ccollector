@@ -1,0 +1,128 @@
+databaseChangeLog:
+  - changeSet:
+      id: 012-create-activity-streams
+      author: zensyra
+      changes:
+        - createTable:
+            tableName: activity_streams
+            columns:
+              - column:
+                  name: activity_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: athlete_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: time
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: elapsed_seconds
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: distance_m
+                  type: DOUBLE PRECISION
+              - column:
+                  name: latitude
+                  type: DOUBLE PRECISION
+              - column:
+                  name: longitude
+                  type: DOUBLE PRECISION
+              - column:
+                  name: altitude_m
+                  type: DOUBLE PRECISION
+              - column:
+                  name: heartrate_bpm
+                  type: INTEGER
+              - column:
+                  name: watts
+                  type: INTEGER
+              - column:
+                  name: cadence_rpm
+                  type: INTEGER
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: now()
+        - addForeignKeyConstraint:
+            baseTableName: activity_streams
+            baseColumnNames: activity_id
+            referencedTableName: activities
+            referencedColumnNames: id
+            constraintName: fk_activity_streams_activity_id
+            onDelete: RESTRICT
+        - addForeignKeyConstraint:
+            baseTableName: activity_streams
+            baseColumnNames: athlete_id
+            referencedTableName: athletes
+            referencedColumnNames: id
+            constraintName: fk_activity_streams_athlete_id
+            onDelete: RESTRICT
+        - createIndex:
+            indexName: idx_activity_streams_activity_id
+            tableName: activity_streams
+            columns:
+              - column:
+                  name: activity_id
+        - createIndex:
+            indexName: idx_activity_streams_athlete_id_time_desc
+            tableName: activity_streams
+            columns:
+              - column:
+                  name: athlete_id
+              - column:
+                  name: time
+                  descending: true
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              DO $$
+              BEGIN
+                BEGIN
+                  PERFORM public.create_hypertable(
+                    'collector.activity_streams'::regclass,
+                    public.by_range('time', INTERVAL '1 day'),
+                    if_not_exists => TRUE
+                  );
+                EXCEPTION
+                  WHEN undefined_function THEN
+                    PERFORM public.create_hypertable(
+                      'collector.activity_streams'::regclass,
+                      'time',
+                      if_not_exists => TRUE,
+                      chunk_time_interval => INTERVAL '1 day'
+                    );
+                END;
+              END
+              $$;
+        - addPrimaryKey:
+            tableName: activity_streams
+            columnNames: activity_id, time, elapsed_seconds
+            constraintName: pk_activity_streams
+      rollback:
+        - dropIndex:
+            indexName: idx_activity_streams_athlete_id_time_desc
+            tableName: activity_streams
+        - dropIndex:
+            indexName: idx_activity_streams_activity_id
+            tableName: activity_streams
+        - dropForeignKeyConstraint:
+            baseTableName: activity_streams
+            constraintName: fk_activity_streams_athlete_id
+        - dropForeignKeyConstraint:
+            baseTableName: activity_streams
+            constraintName: fk_activity_streams_activity_id
+        - dropPrimaryKey:
+            tableName: activity_streams
+            constraintName: pk_activity_streams
+        - dropTable:
+            tableName: activity_streams

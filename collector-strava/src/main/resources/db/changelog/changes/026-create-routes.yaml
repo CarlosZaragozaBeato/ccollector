@@ -1,0 +1,47 @@
+databaseChangeLog:
+  - changeSet:
+      id: 026-create-routes
+      author: zensyra
+      changes:
+        - createTable:
+            tableName: routes
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: strava_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: athlete_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: distance
+                  type: FLOAT
+              - column:
+                  name: elevation_gain
+                  type: FLOAT
+              - column:
+                  name: type
+                  type: INTEGER
+              - column:
+                  name: polyline
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false

@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: 027-widen-encrypted-columns
+      author: zensyra
+      comment: >
+        Widen columns that now store AES-GCM encrypted base64 values
+        instead of plaintext. Old plaintext data must be re-encrypted
+        via a one-time migration script after deploying this change.
+      changes:
+        - modifyDataType:
+            tableName: integration_credentials
+            columnName: client_secret
+            newDataType: varchar(512)
+        - modifyDataType:
+            tableName: oauth_tokens
+            columnName: access_token
+            newDataType: varchar(512)
+        - modifyDataType:
+            tableName: oauth_tokens
+            columnName: refresh_token
+            newDataType: varchar(512)

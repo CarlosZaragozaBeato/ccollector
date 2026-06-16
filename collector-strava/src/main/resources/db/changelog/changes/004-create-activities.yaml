@@ -1,0 +1,65 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-create-activities
+      author: zensyra
+      changes:
+        - createTable:
+            tableName: activities
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: strava_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: athlete_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: type
+                  type: VARCHAR(50)
+              - column:
+                  name: distance
+                  type: DECIMAL(10, 2)
+              - column:
+                  name: moving_time
+                  type: INTEGER
+              - column:
+                  name: elapsed_time
+                  type: INTEGER
+              - column:
+                  name: start_date
+                  type: TIMESTAMPTZ
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - createIndex:
+            indexName: idx_activities_athlete_id
+            tableName: activities
+            columns:
+              - column:
+                  name: athlete_id
+        - createIndex:
+            indexName: idx_activities_start_date
+            tableName: activities
+            columns:
+              - column:
+                  name: start_date

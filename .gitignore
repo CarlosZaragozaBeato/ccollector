@@ -1,0 +1,69 @@
+# Environment
+.env
+.env.*
+!.env.example
+.envrc
+
+# Secrets, credentials, and local seed data
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.secret
+secrets/
+**/secrets/
+collector-strava/src/main/resources/db/changelog/data/data.sql
+*local*.sql
+*secret*.sql
+*credential*.sql
+*token*.sql
+
+# Maven / Java build outputs
+target/
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+dependency-reduced-pom.xml
+.flattened-pom.xml
+release.properties
+
+# Test and coverage artifacts
+jacoco.exec
+*.exec
+surefire-reports/
+failsafe-reports/
+
+# Logs and crash dumps
+*.log
+hs_err_pid*
+replay_pid*
+
+# Docker / compose local overrides
+docker-compose.override.yml
+compose.override.yml
+
+# IDEs and local tooling
+.idea/
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+.codex
+.codex/
+.agents/
+session_message.xml
+sesion_message.xml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Frontend/package-manager artifacts if added later
+node_modules/
+dist/
+coverage/

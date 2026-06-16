@@ -1,0 +1,36 @@
+databaseChangeLog:
+  - changeSet:
+      id: 025-create-activity-metrics
+      author: zensyra
+      changes:
+        - createTable:
+            tableName: activity_metrics
+            columns:
+              - column:
+                  name: activity_id
+                  type: BIGINT
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: normalized_power
+                  type: DECIMAL(8, 2)
+              - column:
+                  name: variability_index
+                  type: DECIMAL(6, 4)
+              - column:
+                  name: efficiency_factor
+                  type: DECIMAL(6, 4)
+              - column:
+                  name: intensity_factor
+                  type: DECIMAL(6, 4)
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false

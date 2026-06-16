@@ -1,0 +1,74 @@
+databaseChangeLog:
+  - changeSet:
+      id: 018-create-athlete-zones
+      author: zensyra
+      changes:
+        - createTable:
+            tableName: athlete_zones
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: athlete_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: zone_type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: zone_index
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: min_value
+                  type: INTEGER
+              - column:
+                  name: max_value
+                  type: INTEGER
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: athlete_zones
+            columnNames: athlete_id, zone_type, zone_index
+            constraintName: uq_athlete_zones_athlete_type_index
+        - addForeignKeyConstraint:
+            baseTableName: athlete_zones
+            baseColumnNames: athlete_id
+            referencedTableName: athletes
+            referencedColumnNames: strava_id
+            constraintName: fk_athlete_zones_athlete_id
+            onDelete: RESTRICT
+        - createIndex:
+            indexName: idx_athlete_zones_athlete_id
+            tableName: athlete_zones
+            columns:
+              - column:
+                  name: athlete_id
+      rollback:
+        - dropIndex:
+            indexName: idx_athlete_zones_athlete_id
+            tableName: athlete_zones
+        - dropForeignKeyConstraint:
+            baseTableName: athlete_zones
+            constraintName: fk_athlete_zones_athlete_id
+        - dropUniqueConstraint:
+            tableName: athlete_zones
+            constraintName: uq_athlete_zones_athlete_type_index
+        - dropTable:
+            tableName: athlete_zones

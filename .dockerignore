@@ -1,0 +1,47 @@
+.git
+.gitignore
+.dockerignore
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+secrets/
+**/secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.secret
+collector-strava/src/main/resources/db/changelog/data/data.sql
+*local*.sql
+*secret*.sql
+*credential*.sql
+*token*.sql
+
+# Local agent/session files
+.codex
+.codex/
+.agents/
+session_message.xml
+sesion_message.xml
+
+# Build and test outputs
+target/
+**/target/
+**/target/**
+!collector-runner/target/
+!collector-runner/target/*-runner
+*.class
+jacoco.exec
+*.exec
+surefire-reports/
+failsafe-reports/
+
+# IDE/OS noise
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

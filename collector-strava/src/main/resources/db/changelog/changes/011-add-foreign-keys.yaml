@@ -1,0 +1,38 @@
+databaseChangeLog:
+  - changeSet:
+      id: 011-add-foreign-keys
+      author: zensyra
+      preConditions:
+        onFail: HALT
+        and:
+          - sqlCheck:
+              expectedResult: 0
+              sql: SELECT COUNT(*) FROM activities WHERE athlete_id NOT IN (SELECT strava_id FROM athletes)
+          - sqlCheck:
+              expectedResult: 0
+              sql: SELECT COUNT(*) FROM activity_laps WHERE activity_strava_id NOT IN (SELECT strava_id FROM activities)
+          - sqlCheck:
+              expectedResult: 0
+              sql: SELECT COUNT(*) FROM gears WHERE athlete_id NOT IN (SELECT strava_id FROM athletes)
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: activities
+            baseColumnNames: athlete_id
+            referencedTableName: athletes
+            referencedColumnNames: strava_id
+            constraintName: fk_activities_athlete_id
+            onDelete: RESTRICT
+        - addForeignKeyConstraint:
+            baseTableName: activity_laps
+            baseColumnNames: activity_strava_id
+            referencedTableName: activities
+            referencedColumnNames: strava_id
+            constraintName: fk_activity_laps_activity_strava_id
+            onDelete: RESTRICT
+        - addForeignKeyConstraint:
+            baseTableName: gears
+            baseColumnNames: athlete_id
+            referencedTableName: athletes
+            referencedColumnNames: strava_id
+            constraintName: fk_gears_athlete_id
+            onDelete: RESTRICT

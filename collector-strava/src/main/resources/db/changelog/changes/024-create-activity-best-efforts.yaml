@@ -1,0 +1,57 @@
+databaseChangeLog:
+  - changeSet:
+      id: 024-create-activity-best-efforts
+      author: zensyra
+      changes:
+        - createTable:
+            tableName: activity_best_efforts
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: activity_strava_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: distance
+                  type: INTEGER
+              - column:
+                  name: elapsed_time
+                  type: INTEGER
+              - column:
+                  name: is_kom
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+              - column:
+                  name: pr_rank
+                  type: INTEGER
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: activity_best_efforts
+            columnNames: activity_strava_id, name
+            constraintName: uq_activity_best_efforts_activity_name
+        - createIndex:
+            indexName: idx_activity_best_efforts_activity_strava_id
+            tableName: activity_best_efforts
+            columns:
+              - column:
+                  name: activity_strava_id

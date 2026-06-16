@@ -1,0 +1,89 @@
+databaseChangeLog:
+  - changeSet:
+      id: 010-create-activity-laps
+      author: zensyra
+      changes:
+        - createTable:
+            tableName: activity_laps
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: activity_strava_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: lap_index
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+              - column:
+                  name: elapsed_time
+                  type: INTEGER
+              - column:
+                  name: moving_time
+                  type: INTEGER
+              - column:
+                  name: start_date
+                  type: TIMESTAMPTZ
+              - column:
+                  name: distance
+                  type: DECIMAL(10,2)
+              - column:
+                  name: average_speed
+                  type: DECIMAL(8,4)
+              - column:
+                  name: max_speed
+                  type: DECIMAL(8,4)
+              - column:
+                  name: average_heartrate
+                  type: DECIMAL(5,2)
+              - column:
+                  name: max_heartrate
+                  type: DECIMAL(5,2)
+              - column:
+                  name: average_watts
+                  type: DECIMAL(8,2)
+              - column:
+                  name: total_elevation_gain
+                  type: DECIMAL(8,2)
+              - column:
+                  name: pace_zone
+                  type: INTEGER
+              - column:
+                  name: split
+                  type: INTEGER
+              - column:
+                  name: start_index
+                  type: INTEGER
+              - column:
+                  name: end_index
+                  type: INTEGER
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: activity_laps
+            columnNames: activity_strava_id, lap_index
+            constraintName: uq_activity_laps_activity_lap_index
+        - createIndex:
+            indexName: idx_activity_laps_activity_strava_id
+            tableName: activity_laps
+            columns:
+              - column:
+                  name: activity_strava_id

@@ -1,0 +1,37 @@
+databaseChangeLog:
+  - changeSet:
+      id: 022-wave3-multiathlete-indexes
+      author: zensyra
+      comment: >
+        Phase 15 Wave 3 — multi-athlete index readiness.
+        Adds a composite index on activities(athlete_id, start_date DESC) to
+        eliminate the implicit sort step on findMaxStartDateByAthleteId and any
+        future sorted per-athlete activity queries. All other per-athlete indexes
+        (athlete_id on activities, gears, athlete_zones; stream sync composite;
+        calories composite) are already present in changesets 007 and 016-019.
+      changes:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              -- Covers findMaxStartDateByAthleteId:
+              --   SELECT MAX(start_date) FROM activities WHERE athlete_id = ?
+              -- With this index PostgreSQL resolves the MAX in a single
+              -- index-scan step (first row DESC) instead of scanning all rows
+              -- for the athlete and computing MAX in memory.
+              --
+              -- Also covers any future sorted per-athlete activity query:
+              --   SELECT ... FROM activities WHERE athlete_id = ? ORDER BY start_date DESC
+              -- The partial WHERE avoids indexing the small fraction of rows
+              -- without a start_date.
+              CREATE INDEX IF NOT EXISTS idx_activities_athlete_start_date
+                ON collector.activities (athlete_id, start_date DESC)
+                WHERE start_date IS NOT NULL;
+      rollback:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              DROP INDEX IF EXISTS collector.idx_activities_athlete_start_date;

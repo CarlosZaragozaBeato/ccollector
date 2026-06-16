@@ -1,0 +1,67 @@
+databaseChangeLog:
+  - changeSet:
+      id: 014-timescale-streams-optimization
+      author: zensyra
+      changes:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              ALTER TABLE collector.activity_streams
+              SET (
+                timescaledb.compress = true,
+                timescaledb.compress_segmentby = 'athlete_id,activity_id',
+                timescaledb.compress_orderby = 'time DESC'
+              );
+
+              SELECT public.add_compression_policy(
+                'collector.activity_streams'::regclass,
+                compress_after => INTERVAL '14 days',
+                if_not_exists => TRUE
+              );
+
+              CREATE MATERIALIZED VIEW IF NOT EXISTS collector.cagg_activity_streams_hr_power_5m
+              WITH (timescaledb.continuous) AS
+              SELECT
+                public.time_bucket(INTERVAL '5 minutes', "time") AS bucket_start,
+                athlete_id,
+                activity_id,
+                count(*) AS sample_count,
+                avg(heartrate_bpm) FILTER (WHERE heartrate_bpm IS NOT NULL) AS avg_heartrate_bpm,
+                avg(watts) FILTER (WHERE watts IS NOT NULL) AS avg_watts,
+                sum(CASE WHEN heartrate_bpm < 120 THEN 1 ELSE 0 END) AS hr_z1_samples,
+                sum(CASE WHEN heartrate_bpm >= 120 AND heartrate_bpm < 140 THEN 1 ELSE 0 END) AS hr_z2_samples,
+                sum(CASE WHEN heartrate_bpm >= 140 AND heartrate_bpm < 160 THEN 1 ELSE 0 END) AS hr_z3_samples,
+                sum(CASE WHEN heartrate_bpm >= 160 AND heartrate_bpm < 175 THEN 1 ELSE 0 END) AS hr_z4_samples,
+                sum(CASE WHEN heartrate_bpm >= 175 THEN 1 ELSE 0 END) AS hr_z5_samples,
+                sum(CASE WHEN watts < 150 THEN 1 ELSE 0 END) AS power_z1_samples,
+                sum(CASE WHEN watts >= 150 AND watts < 200 THEN 1 ELSE 0 END) AS power_z2_samples,
+                sum(CASE WHEN watts >= 200 AND watts < 250 THEN 1 ELSE 0 END) AS power_z3_samples,
+                sum(CASE WHEN watts >= 250 AND watts < 300 THEN 1 ELSE 0 END) AS power_z4_samples,
+                sum(CASE WHEN watts >= 300 THEN 1 ELSE 0 END) AS power_z5_samples
+              FROM collector.activity_streams
+              GROUP BY bucket_start, athlete_id, activity_id
+              WITH NO DATA;
+
+              SELECT public.add_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_hr_power_5m'::regclass,
+                start_offset => INTERVAL '30 days',
+                end_offset => INTERVAL '5 minutes',
+                schedule_interval => INTERVAL '15 minutes',
+                if_not_exists => TRUE
+              );
+      rollback:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              SELECT public.remove_continuous_aggregate_policy('collector.cagg_activity_streams_hr_power_5m'::regclass, if_exists => TRUE);
+              DROP MATERIALIZED VIEW IF EXISTS collector.cagg_activity_streams_hr_power_5m;
+              SELECT public.remove_compression_policy('collector.activity_streams'::regclass, if_exists => TRUE);
+              ALTER TABLE collector.activity_streams RESET (
+                timescaledb.compress,
+                timescaledb.compress_segmentby,
+                timescaledb.compress_orderby
+              );

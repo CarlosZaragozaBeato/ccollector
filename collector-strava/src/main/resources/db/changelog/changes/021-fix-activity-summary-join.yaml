@@ -1,0 +1,119 @@
+databaseChangeLog:
+  - changeSet:
+      id: 021-fix-activity-summary-join
+      author: zensyra
+      changes:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              -- =================================================================
+              -- Fix: activity_streams.activity_id references activities.id (PK),
+              -- not activities.strava_id. Changeset 020 used the wrong join key
+              -- producing 0 rows. Drop and recreate all four objects.
+              -- =================================================================
+
+              DROP VIEW IF EXISTS collector.monthly_activity_summary;
+              SELECT public.remove_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_monthly'::regclass,
+                if_exists => TRUE
+              );
+              DROP MATERIALIZED VIEW IF EXISTS collector.cagg_activity_streams_monthly;
+
+              DROP VIEW IF EXISTS collector.weekly_activity_summary;
+              SELECT public.remove_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_weekly'::regclass,
+                if_exists => TRUE
+              );
+              DROP MATERIALIZED VIEW IF EXISTS collector.cagg_activity_streams_weekly;
+
+              -- =================================================================
+              -- Recreate weekly cagg with correct join: a.id = s.activity_id
+              -- =================================================================
+              CREATE MATERIALIZED VIEW IF NOT EXISTS collector.cagg_activity_streams_weekly
+              WITH (timescaledb.continuous) AS
+              SELECT
+                public.time_bucket(INTERVAL '1 week', s.time) AS week,
+                s.athlete_id,
+                s.activity_id,
+                MAX(a.distance)             AS distance_m,
+                MAX(a.moving_time)          AS moving_time_s,
+                MAX(a.total_elevation_gain) AS elevation_gain_m
+              FROM collector.activity_streams s
+              JOIN collector.activities a ON a.id = s.activity_id
+              GROUP BY week, s.athlete_id, s.activity_id
+              WITH NO DATA;
+
+              SELECT public.add_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_weekly'::regclass,
+                start_offset      => INTERVAL '3 months',
+                end_offset        => INTERVAL '1 hour',
+                schedule_interval => INTERVAL '1 hour',
+                if_not_exists     => TRUE
+              );
+
+              CREATE OR REPLACE VIEW collector.weekly_activity_summary AS
+              SELECT
+                week,
+                athlete_id,
+                COUNT(*)              AS num_activities,
+                SUM(distance_m)       AS total_distance_m,
+                SUM(moving_time_s)    AS total_moving_time_s,
+                SUM(elevation_gain_m) AS total_elevation_gain_m
+              FROM collector.cagg_activity_streams_weekly
+              GROUP BY week, athlete_id;
+
+              -- =================================================================
+              -- Recreate monthly cagg with correct join: a.id = s.activity_id
+              -- =================================================================
+              CREATE MATERIALIZED VIEW IF NOT EXISTS collector.cagg_activity_streams_monthly
+              WITH (timescaledb.continuous) AS
+              SELECT
+                public.time_bucket(INTERVAL '1 month', s.time) AS month,
+                s.athlete_id,
+                s.activity_id,
+                MAX(a.distance)             AS distance_m,
+                MAX(a.moving_time)          AS moving_time_s,
+                MAX(a.total_elevation_gain) AS elevation_gain_m
+              FROM collector.activity_streams s
+              JOIN collector.activities a ON a.id = s.activity_id
+              GROUP BY month, s.athlete_id, s.activity_id
+              WITH NO DATA;
+
+              SELECT public.add_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_monthly'::regclass,
+                start_offset      => INTERVAL '13 months',
+                end_offset        => INTERVAL '1 day',
+                schedule_interval => INTERVAL '1 day',
+                if_not_exists     => TRUE
+              );
+
+              CREATE OR REPLACE VIEW collector.monthly_activity_summary AS
+              SELECT
+                month,
+                athlete_id,
+                COUNT(*)              AS num_activities,
+                SUM(distance_m)       AS total_distance_m,
+                SUM(moving_time_s)    AS total_moving_time_s,
+                SUM(elevation_gain_m) AS total_elevation_gain_m
+              FROM collector.cagg_activity_streams_monthly
+              GROUP BY month, athlete_id;
+      rollback:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              DROP VIEW IF EXISTS collector.monthly_activity_summary;
+              SELECT public.remove_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_monthly'::regclass,
+                if_exists => TRUE
+              );
+              DROP MATERIALIZED VIEW IF EXISTS collector.cagg_activity_streams_monthly;
+              DROP VIEW IF EXISTS collector.weekly_activity_summary;
+              SELECT public.remove_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_weekly'::regclass,
+                if_exists => TRUE
+              );
+              DROP MATERIALIZED VIEW IF EXISTS collector.cagg_activity_streams_weekly;

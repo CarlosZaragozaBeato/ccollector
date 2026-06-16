@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 015-fix-streams-compression-orderby
+      author: zensyra
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE activity_streams
+              SET (timescaledb.compress_orderby = 'time DESC, elapsed_seconds DESC');
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              ALTER TABLE activity_streams
+              SET (timescaledb.compress_orderby = 'time DESC');

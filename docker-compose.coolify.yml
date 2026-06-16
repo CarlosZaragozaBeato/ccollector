@@ -1,0 +1,35 @@
+services:
+  collector:
+    image: 'ghcr.io/zensyra/zensyra_collector/collector@sha256:2cd35ba47bf89124a285541385ad817ea6ed54d7a70f7d40f22450e801c6cb9e'
+    container_name: zensyra-collector
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      DB_USERNAME: '${DB_USERNAME}'
+      DB_PASSWORD: '${DB_PASSWORD}'
+      DB_JDBC_URL: '${DB_JDBC_URL}'
+      QUARKUS_LOG_LEVEL: '${QUARKUS_LOG_LEVEL}'
+      ZENSYRA_LOG_LEVEL: '${ZENSYRA_LOG_LEVEL}'
+      COLLECTOR_ENCRYPTION_KEY: '${COLLECTOR_ENCRYPTION_KEY}'
+      COLLECTOR_API_KEY: '${COLLECTOR_API_KEY}'
+      ADMIN_TOKEN: '${ADMIN_TOKEN}'
+      QUARTZ_STORE_TYPE: '${QUARTZ_STORE_TYPE:-jdbc-cmt}'
+      QUARTZ_CLUSTERED: '${QUARTZ_CLUSTERED:-true}'
+      QUARKUS_SHUTDOWN_TIMEOUT: '${QUARKUS_SHUTDOWN_TIMEOUT:-30S}'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:8080/q/health/live || curl -fsS http://127.0.0.1:8080/q/health/live >/dev/null']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    ports:
+      - '127.0.0.1:8090:8080'
+    networks:
+      - zensyra_internal
+      - d4c8wgwcsgkw8448cwcc88kw
+networks:
+  zensyra_internal:
+    external: true
+  d4c8wgwcsgkw8448cwcc88kw:
+    external: true

@@ -1,0 +1,80 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-athletes
+      author: zensyra
+      changes:
+        - createTable:
+            tableName: athletes
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: strava_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: username
+                  type: VARCHAR(255)
+              - column:
+                  name: firstname
+                  type: VARCHAR(255)
+              - column:
+                  name: lastname
+                  type: VARCHAR(255)
+              - column:
+                  name: city
+                  type: VARCHAR(255)
+              - column:
+                  name: country
+                  type: VARCHAR(255)
+              - column:
+                  name: sex
+                  type: VARCHAR(1)
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 008-expand-athletes
+      author: zensyra
+      changes:
+        - addColumn:
+            tableName: athletes
+            columns:
+              - column:
+                  name: weight
+                  type: DECIMAL(5,2)
+              - column:
+                  name: profile
+                  type: VARCHAR(500)
+              - column:
+                  name: measurement_preference
+                  type: VARCHAR(20)
+              - column:
+                  name: ftp
+                  type: INTEGER
+              - column:
+                  name: follower_count
+                  type: INTEGER
+              - column:
+                  name: friend_count
+                  type: INTEGER
+              - column:
+                  name: premium
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false

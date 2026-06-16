@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: 016-add-performance-indexes
+      author: zensyra
+      comment: >
+        DB-01: composite index for findStravaIdsWithoutCaloriesByAthleteId() —
+        used by SyncActivityDetailJob every hour. Without it PostgreSQL performs
+        an in-memory sort over all activities without calories.
+        DB-02: composite index for findPendingStreamActivitiesByAthleteId() —
+        used by SyncActivityStreamsJob every hour. The OR condition on
+        streams_sync_status prevents single-column index use.
+      changes:
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE INDEX idx_activities_athlete_calories_date
+              ON activities (athlete_id, calories, start_date DESC);
+
+              CREATE INDEX idx_activities_stream_sync
+              ON activities (athlete_id, streams_sync_status, streams_sync_attempts);
+      rollback:
+        - sql:
+            dbms: postgresql
+            sql: |
+              DROP INDEX IF EXISTS idx_activities_athlete_calories_date;
+              DROP INDEX IF EXISTS idx_activities_stream_sync;

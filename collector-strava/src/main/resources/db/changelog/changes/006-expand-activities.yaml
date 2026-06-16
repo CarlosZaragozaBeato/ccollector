@@ -1,0 +1,77 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-expand-activities
+      author: zensyra
+      changes:
+        - addColumn:
+            tableName: activities
+            columns:
+              - column:
+                  name: sport_type
+                  type: VARCHAR(50)
+              - column:
+                  name: total_elevation_gain
+                  type: DECIMAL(8,2)
+              - column:
+                  name: average_speed
+                  type: DECIMAL(8,4)
+              - column:
+                  name: max_speed
+                  type: DECIMAL(8,4)
+              - column:
+                  name: average_heartrate
+                  type: DECIMAL(5,2)
+              - column:
+                  name: max_heartrate
+                  type: DECIMAL(5,2)
+              - column:
+                  name: average_watts
+                  type: DECIMAL(8,2)
+              - column:
+                  name: kilojoules
+                  type: DECIMAL(10,2)
+              - column:
+                  name: suffer_score
+                  type: INTEGER
+              - column:
+                  name: trainer
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: commute
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: manual
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: private
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: flagged
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: gear_id
+                  type: VARCHAR(50)
+              - column:
+                  name: timezone
+                  type: VARCHAR(100)
+              - column:
+                  name: start_latlng
+                  type: VARCHAR(50)
+              - column:
+                  name: end_latlng
+                  type: VARCHAR(50)

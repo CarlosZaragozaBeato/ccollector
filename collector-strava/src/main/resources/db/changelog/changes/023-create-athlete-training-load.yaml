@@ -1,0 +1,77 @@
+databaseChangeLog:
+  - changeSet:
+      id: 023-create-athlete-training-load
+      author: zensyra
+      changes:
+        - createTable:
+            tableName: athlete_training_load
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: athlete_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tss_day
+                  type: DOUBLE PRECISION
+              - column:
+                  name: ctl
+                  type: DOUBLE PRECISION
+              - column:
+                  name: atl
+                  type: DOUBLE PRECISION
+              - column:
+                  name: tsb
+                  type: DOUBLE PRECISION
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: athlete_training_load
+            columnNames: athlete_id, date
+            constraintName: uq_athlete_training_load_athlete_date
+        - addForeignKeyConstraint:
+            baseTableName: athlete_training_load
+            baseColumnNames: athlete_id
+            referencedTableName: athletes
+            referencedColumnNames: strava_id
+            constraintName: fk_athlete_training_load_athlete_id
+            onDelete: RESTRICT
+        - createIndex:
+            indexName: idx_athlete_training_load_athlete_date
+            tableName: athlete_training_load
+            columns:
+              - column:
+                  name: athlete_id
+              - column:
+                  name: date
+      rollback:
+        - dropIndex:
+            indexName: idx_athlete_training_load_athlete_date
+            tableName: athlete_training_load
+        - dropForeignKeyConstraint:
+            baseTableName: athlete_training_load
+            constraintName: fk_athlete_training_load_athlete_id
+        - dropUniqueConstraint:
+            tableName: athlete_training_load
+            constraintName: uq_athlete_training_load_athlete_date
+        - dropTable:
+            tableName: athlete_training_load

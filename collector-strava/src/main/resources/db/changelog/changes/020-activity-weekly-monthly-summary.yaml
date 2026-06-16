@@ -1,0 +1,115 @@
+databaseChangeLog:
+  - changeSet:
+      id: 020-activity-weekly-monthly-summary
+      author: zensyra
+      changes:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              -- =================================================================
+              -- Base weekly continuous aggregate
+              -- Groups activity_streams by (week, athlete_id, activity_id) and
+              -- pulls pre-computed Strava metrics from activities via JOIN.
+              -- Using MAX() is correct: distance/moving_time/elevation are
+              -- constant per activity_id across all stream rows.
+              -- Requires TimescaleDB 2.10+ for JOIN support in continuous
+              -- aggregates. Project uses 2.13+ (confirmed by by_range API).
+              -- =================================================================
+              CREATE MATERIALIZED VIEW IF NOT EXISTS collector.cagg_activity_streams_weekly
+              WITH (timescaledb.continuous) AS
+              SELECT
+                public.time_bucket(INTERVAL '1 week', s.time) AS week,
+                s.athlete_id,
+                s.activity_id,
+                MAX(a.distance)              AS distance_m,
+                MAX(a.moving_time)           AS moving_time_s,
+                MAX(a.total_elevation_gain)  AS elevation_gain_m
+              FROM collector.activity_streams s
+              JOIN collector.activities a ON a.strava_id = s.activity_id
+              GROUP BY week, s.athlete_id, s.activity_id
+              WITH NO DATA;
+
+              SELECT public.add_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_weekly'::regclass,
+                start_offset      => INTERVAL '3 months',
+                end_offset        => INTERVAL '1 hour',
+                schedule_interval => INTERVAL '1 hour',
+                if_not_exists     => TRUE
+              );
+
+              -- =================================================================
+              -- Weekly activity summary (user-facing view)
+              -- Rolls up the per-activity weekly cagg to per-athlete weekly totals.
+              -- Being a regular view (not materialized) ensures data is always
+              -- consistent with the underlying cagg without a separate refresh.
+              -- =================================================================
+              CREATE OR REPLACE VIEW collector.weekly_activity_summary AS
+              SELECT
+                week,
+                athlete_id,
+                COUNT(*)                   AS num_activities,
+                SUM(distance_m)            AS total_distance_m,
+                SUM(moving_time_s)         AS total_moving_time_s,
+                SUM(elevation_gain_m)      AS total_elevation_gain_m
+              FROM collector.cagg_activity_streams_weekly
+              GROUP BY week, athlete_id;
+
+              -- =================================================================
+              -- Base monthly continuous aggregate
+              -- Same design as the weekly cagg but with 1-month buckets.
+              -- =================================================================
+              CREATE MATERIALIZED VIEW IF NOT EXISTS collector.cagg_activity_streams_monthly
+              WITH (timescaledb.continuous) AS
+              SELECT
+                public.time_bucket(INTERVAL '1 month', s.time) AS month,
+                s.athlete_id,
+                s.activity_id,
+                MAX(a.distance)              AS distance_m,
+                MAX(a.moving_time)           AS moving_time_s,
+                MAX(a.total_elevation_gain)  AS elevation_gain_m
+              FROM collector.activity_streams s
+              JOIN collector.activities a ON a.strava_id = s.activity_id
+              GROUP BY month, s.athlete_id, s.activity_id
+              WITH NO DATA;
+
+              SELECT public.add_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_monthly'::regclass,
+                start_offset      => INTERVAL '13 months',
+                end_offset        => INTERVAL '1 day',
+                schedule_interval => INTERVAL '1 day',
+                if_not_exists     => TRUE
+              );
+
+              -- =================================================================
+              -- Monthly activity summary (user-facing view)
+              -- =================================================================
+              CREATE OR REPLACE VIEW collector.monthly_activity_summary AS
+              SELECT
+                month,
+                athlete_id,
+                COUNT(*)                   AS num_activities,
+                SUM(distance_m)            AS total_distance_m,
+                SUM(moving_time_s)         AS total_moving_time_s,
+                SUM(elevation_gain_m)      AS total_elevation_gain_m
+              FROM collector.cagg_activity_streams_monthly
+              GROUP BY month, athlete_id;
+      rollback:
+        - sql:
+            dbms: postgresql
+            splitStatements: false
+            stripComments: true
+            sql: |
+              DROP VIEW IF EXISTS collector.monthly_activity_summary;
+              SELECT public.remove_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_monthly'::regclass,
+                if_exists => TRUE
+              );
+              DROP MATERIALIZED VIEW IF EXISTS collector.cagg_activity_streams_monthly;
+              DROP VIEW IF EXISTS collector.weekly_activity_summary;
+              SELECT public.remove_continuous_aggregate_policy(
+                'collector.cagg_activity_streams_weekly'::regclass,
+                if_exists => TRUE
+              );
+              DROP MATERIALIZED VIEW IF EXISTS collector.cagg_activity_streams_weekly;
