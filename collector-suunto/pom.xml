@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
@@ -12,50 +11,49 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>collector-runner</artifactId>
+    <artifactId>collector-suunto</artifactId>
     <description>
-        Punto de entrada del daemon. Quarkus runtime, scheduling, observabilidad.
-        Único módulo con quarkus-maven-plugin — aquí vive el proceso.
+        Suunto integration: OAuth2, HTTP client, athlete and activity synchronization.
+        Implements the interfaces defined in collector-core.
     </description>
 
     <dependencies>
-
-        <!-- ===== INTERNAL MODULES ===== -->
+        <!-- ===== CORE (shared infra) ===== -->
         <dependency>
             <groupId>com.zensyra</groupId>
             <artifactId>collector-core</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.zensyra</groupId>
-            <artifactId>collector-strava</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.zensyra</groupId>
-            <artifactId>collector-suunto</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.zensyra</groupId>
-            <artifactId>collector-api</artifactId>
-        </dependency>
 
-        <!-- ===== SCHEDULING ===== -->
+        <!-- ===== HTTP CLIENT ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-quartz</artifactId>
+            <artifactId>quarkus-rest-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-client-jackson</artifactId>
         </dependency>
 
-        <!-- ===== OBSERVABILITY ===== -->
+        <!-- ===== SERIALIZACIÓN ===== -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jackson</artifactId>
+        </dependency>
+
+        <!-- ===== OBSERVABILIDAD ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-health</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest</artifactId>
+            <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
         </dependency>
+
+        <!-- ===== VALIDACIÓN ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
+            <artifactId>quarkus-hibernate-validator</artifactId>
         </dependency>
 
         <!-- ===== TESTING ===== -->
@@ -80,49 +78,48 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>3.9.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
             <version>1.19.8</version>
             <scope>test</scope>
         </dependency>
-
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest-jackson</artifactId>
-        </dependency>
-
-
     </dependencies>
+
 
     <build>
         <plugins>
             <plugin>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-maven-plugin</artifactId>
-                <extensions>true</extensions>
                 <executions>
                     <execution>
                         <goals>
-                            <goal>build</goal>
-                            <goal>generate-code</goal>
                             <goal>generate-code-tests</goal>
                         </goals>
                     </execution>
                 </executions>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <version>3.2.1</version>
                 <executions>
                     <execution>
+                        <id>make-index</id>
                         <goals>
-                            <goal>integration-test</goal>
-                            <goal>verify</goal>
+                            <goal>jandex</goal>
                         </goals>
                     </execution>
                 </executions>
             </plugin>
         </plugins>
     </build>
+
 
 </project>

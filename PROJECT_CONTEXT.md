@@ -37,6 +37,7 @@ This is not a full athlete-facing product yet. There is no dashboard, no webhook
 zensyra-collector/
 |-- collector-core/      shared infrastructure: credentials, OAuth tokens, sync abstractions, health, rate limits
 |-- collector-strava/    Strava client, DTOs, entities, repositories, upsert services, jobs, metrics computation
+|-- collector-suunto/    Suunto client, DTOs, entities, repositories, upsert services, jobs, metrics computation
 |-- collector-api/       secured read API and athlete registration endpoint
 `-- collector-runner/    Quarkus runtime, Quartz registration, admin/dev triggers, health, metrics, packaging
 ```
@@ -45,6 +46,7 @@ zensyra-collector/
 
 - `collector-core` must not depend on other internal modules.
 - `collector-strava` depends on `collector-core`.
+- `collector-suunto` depends on `collector-core`.
 - `collector-api` depends on `collector-core` and `collector-strava` because the read resources query Strava repositories directly.
 - `collector-runner` aggregates all modules and is the runnable Quarkus application.
 - A new vendor integration should be added as a new `collector-[vendor]` module.

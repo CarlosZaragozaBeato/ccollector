@@ -18,6 +18,7 @@
         <module>collector-strava</module>
         <module>collector-api</module>
         <module>collector-runner</module>
+        <module>collector-suunto</module>
     </modules>
 
     <properties>

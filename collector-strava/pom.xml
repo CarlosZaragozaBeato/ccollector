@@ -14,13 +14,13 @@
 
     <artifactId>collector-strava</artifactId>
     <description>
-        Integración Strava: OAuth2, cliente HTTP, sincronización de atletas y actividades.
-        Implementa las interfaces definidas en collector-core.
+        Strava integration: OAuth2, HTTP client, athlete and activity synchronization.
+        Implements the interfaces defined in collector-core.
     </description>
 
     <dependencies>
 
-        <!-- ===== CORE (infra compartida) ===== -->
+        <!-- ===== CORE (shared infra) ===== -->
         <dependency>
             <groupId>com.zensyra</groupId>
             <artifactId>collector-core</artifactId>
@@ -107,8 +107,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- Genera META-INF/jandex.idx para que Quarkus descubra los beans
-                 de este módulo cuando se usa como dependencia en tests (ej: collector-api) -->
             <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>
