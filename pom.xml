@@ -15,6 +15,7 @@
 
     <modules>
         <module>collector-core</module>
+        <module>collector-query</module>
         <module>collector-strava</module>
         <module>collector-api</module>
         <module>collector-runner</module>
@@ -45,7 +46,7 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Quarkus BOM — gestiona todas las versiones de extensiones -->
+            <!-- Quarkus BOM manages all extension versions. -->
             <dependency>
                 <groupId>${quarkus.platform.group-id}</groupId>
                 <artifactId>${quarkus.platform.artifact-id}</artifactId>
@@ -54,7 +55,7 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- Módulos internos -->
+            <!-- Internal modules -->
             <dependency>
                 <groupId>com.zensyra</groupId>
                 <artifactId>collector-core</artifactId>
@@ -70,6 +71,13 @@
                 <artifactId>collector-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
+            <dependency>
+                <groupId>com.zensyra</groupId>
+                <artifactId>collector-query</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
@@ -187,7 +195,7 @@
             <properties>
                 <quarkus.native.enabled>true</quarkus.native.enabled>
                 <quarkus.package.jar.enabled>false</quarkus.package.jar.enabled>
-                <!-- Compilar con Mandrel dentro de Docker — no requiere GraalVM local -->
+                <!-- Build with Mandrel in Docker — no local GraalVM required. -->
                 <quarkus.native.container-build>true</quarkus.native.container-build>
                 <quarkus.native.builder-image>quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-21</quarkus.native.builder-image>
             </properties>

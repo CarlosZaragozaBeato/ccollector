@@ -1,5 +1,7 @@
 package com.zensyra.collector.strava.job;
 
+import com.zensyra.collector.core.identity.IntegrationAccount;
+import com.zensyra.collector.core.identity.IntegrationAccountRepository;
 import com.zensyra.collector.core.oauth.OAuthToken;
 import com.zensyra.collector.core.oauth.OAuthTokenRepository;
 import com.zensyra.collector.core.oauth.OAuthTokenService;
@@ -19,6 +21,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,6 +43,9 @@ class SyncAthleteJobTest {
     OAuthTokenService tokenService;
 
     @InjectMock
+    IntegrationAccountRepository integrationAccountRepository;
+
+    @InjectMock
     @RestClient
     StravaApiClient stravaApiClient;
 
@@ -57,6 +63,28 @@ class SyncAthleteJobTest {
 
         assertDoesNotThrow(() -> job.execute(buildContext()));
 
+        verify(athleteUpsertService).upsert(dto);
+    }
+
+    @Test
+    void shouldResolveCanonicalAccountAndRefreshByAccountId() throws Exception {
+        IntegrationAccount account = new IntegrationAccount(
+                java.util.UUID.randomUUID(),
+                IntegrationSource.STRAVA,
+                "canonical-athlete"
+        );
+        OAuthToken token = buildToken("legacy-athlete");
+        token.setIntegrationAccountId(account.getId());
+
+        when(tokenRepository.findAllBySource(IntegrationSource.STRAVA)).thenReturn(List.of(token));
+        when(integrationAccountRepository.findByIdOptional(account.getId())).thenReturn(Optional.of(account));
+        when(tokenService.getValidToken(account.getId())).thenReturn("canonical-access-token");
+        StravaAthleteDto dto = buildAthleteDto(12345L);
+        when(stravaApiClient.getAthlete("Bearer canonical-access-token")).thenReturn(dto);
+
+        assertDoesNotThrow(() -> job.execute(buildContext()));
+
+        verify(tokenService).getValidToken(account.getId());
         verify(athleteUpsertService).upsert(dto);
     }
 

@@ -72,7 +72,7 @@ public class AdminTriggerResource {
                     try {
                         syncJobExecutor.execute(job);
                     } catch (Exception e) {
-                        LOG.errorf(e, "AdminTriggerResource: job '%s' falló", jobId);
+                        LOG.errorf(e, "AdminTriggerResource: job '%s' failed", jobId);
                         return Response.serverError()
                                 .entity(Map.of("error", "job execution failed", "job", jobId))
                                 .build();

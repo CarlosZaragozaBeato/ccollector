@@ -1,7 +1,6 @@
 package com.zensyra.collector.strava.job;
 
 import com.zensyra.collector.core.oauth.OAuthToken;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.activity.ActivityUpsertService;
 import com.zensyra.collector.strava.api.dto.StravaActivityDto;
@@ -38,17 +37,18 @@ public class InitialHistoricalSyncJob extends AbstractStravaJob {
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
         if (context.lastRunAt() != null) {
-            LOG.info("InitialHistoricalSyncJob: carga histórica ya ejecutada — omitiendo");
+            LOG.info("InitialHistoricalSyncJob: historical load already executed — skipping");
             return true;
         }
-        syncHistoryForUser(token.getExternalUserId());
+        syncHistoryForUser(token);
         return false;
     }
 
-    private void syncHistoryForUser(String externalUserId) {
-        LOG.infof("InitialHistoricalSyncJob: iniciando carga histórica para usuario '%s'", externalUserId);
+    private void syncHistoryForUser(OAuthToken token) {
+        String externalUserId = externalUserId(token);
+        LOG.infof("InitialHistoricalSyncJob: starting historical load for user '%s'", externalUserId);
 
-        String accessToken = tokenService.getValidToken(IntegrationSource.STRAVA, externalUserId);
+        String accessToken = validAccessToken(token);
         int page = 1;
         int totalSynced = 0;
 
@@ -59,7 +59,7 @@ public class InitialHistoricalSyncJob extends AbstractStravaJob {
             );
 
             if (dtos.isEmpty()) {
-                LOG.infof("InitialHistoricalSyncJob: página %d vacía — carga completa", page);
+                LOG.infof("InitialHistoricalSyncJob: page %d is empty — load complete", page);
                 break;
             }
 
@@ -68,7 +68,7 @@ public class InitialHistoricalSyncJob extends AbstractStravaJob {
                 totalSynced++;
             }
 
-            LOG.infof("InitialHistoricalSyncJob — usuario: '%s', página %d, %d actividades procesadas (total: %d)",
+            LOG.infof("InitialHistoricalSyncJob — user: '%s', page %d, %d activities processed (total: %d)",
                     externalUserId, page, dtos.size(), totalSynced);
 
             if (dtos.size() < PER_PAGE) break;
@@ -76,7 +76,7 @@ public class InitialHistoricalSyncJob extends AbstractStravaJob {
             page++;
         }
 
-        LOG.infof("InitialHistoricalSyncJob completado — usuario: '%s', total histórico: %d actividades",
+        LOG.infof("InitialHistoricalSyncJob completed — user: '%s', historical total: %d activities",
                 externalUserId, totalSynced);
     }
 }

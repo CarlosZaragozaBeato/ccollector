@@ -14,13 +14,13 @@
 
     <artifactId>collector-core</artifactId>
     <description>
-        Abstracciones comunes, infraestructura compartida, persistencia base.
-        Ningún otro módulo añade infra — todo pasa por aquí.
+        Common abstractions, shared infrastructure, and base persistence.
+        No other module adds infrastructure; all shared infrastructure belongs here.
     </description>
 
     <dependencies>
 
-        <!-- ===== PERSISTENCIA ===== -->
+        <!-- ===== PERSISTENCE ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-hibernate-orm-panache</artifactId>
@@ -30,13 +30,13 @@
             <artifactId>quarkus-jdbc-postgresql</artifactId>
         </dependency>
 
-        <!-- ===== OBSERVABILIDAD ===== -->
+        <!-- ===== OBSERVABILITY ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-health</artifactId>
         </dependency>
 
-        <!-- ===== RESILIENCIA ===== -->
+        <!-- ===== RESILIENCE ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-fault-tolerance</artifactId>
@@ -62,6 +62,11 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5-mockito</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
             <artifactId>quarkus-jdbc-postgresql-deployment</artifactId>
             <scope>test</scope>
         </dependency>
@@ -76,8 +81,8 @@
 
     <build>
         <plugins>
-            <!-- Genera META-INF/jandex.idx para que Quarkus descubra los beans
-                 de este módulo cuando se usa como dependencia en tests -->
+            <!-- Generates META-INF/jandex.idx so Quarkus discovers this module's
+                 beans when it is used as a test dependency. -->
             <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>

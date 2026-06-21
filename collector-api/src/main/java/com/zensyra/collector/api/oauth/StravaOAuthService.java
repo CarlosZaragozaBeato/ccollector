@@ -37,7 +37,7 @@ public class StravaOAuthService {
         IntegrationCredential credential = credentialRepository
                 .findBySource(IntegrationSource.STRAVA)
                 .orElseThrow(() -> new StravaOAuthExchangeException(
-                        "No se encontraron credenciales de Strava en BD"
+                        "No Strava credentials were found in the database"
                 ));
 
         String body = buildFormBody(
@@ -57,10 +57,10 @@ public class StravaOAuthService {
         try {
             response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (IOException e) {
-            throw new StravaOAuthExchangeException("No se pudo conectar con Strava OAuth", e);
+            throw new StravaOAuthExchangeException("Could not connect to Strava OAuth", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new StravaOAuthExchangeException("Interrumpido al intercambiar código OAuth con Strava", e);
+            throw new StravaOAuthExchangeException("Interrupted while exchanging the OAuth code with Strava", e);
         }
 
         if (response.statusCode() != 200) {
@@ -85,7 +85,7 @@ public class StravaOAuthService {
                     Instant.ofEpochSecond(json.get("expires_at").asLong())
             );
         } catch (IOException e) {
-            throw new StravaOAuthExchangeException("No se pudo parsear la respuesta OAuth de Strava", e);
+            throw new StravaOAuthExchangeException("Could not parse the Strava OAuth response", e);
         }
     }
 

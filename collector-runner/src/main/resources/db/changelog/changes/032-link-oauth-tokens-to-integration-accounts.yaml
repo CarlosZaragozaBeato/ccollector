@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: 032-link-oauth-tokens-to-integration-accounts
+      author: zensyra
+      comment: Adds the canonical account link to legacy OAuth tokens without changing the existing token fields.
+      changes:
+        - addColumn:
+            tableName: oauth_tokens
+            columns:
+              - column:
+                  name: integration_account_id
+                  type: UUID
+        - addForeignKeyConstraint:
+            baseTableName: oauth_tokens
+            baseColumnNames: integration_account_id
+            referencedTableName: integration_accounts
+            referencedColumnNames: id
+            constraintName: fk_oauth_tokens_integration_account_id
+        - createIndex:
+            tableName: oauth_tokens
+            indexName: idx_oauth_tokens_integration_account_id
+            columns:
+              - column:
+                  name: integration_account_id
+      rollback:
+        - dropIndex:
+            tableName: oauth_tokens
+            indexName: idx_oauth_tokens_integration_account_id
+        - dropForeignKeyConstraint:
+            baseTableName: oauth_tokens
+            constraintName: fk_oauth_tokens_integration_account_id
+        - dropColumn:
+            tableName: oauth_tokens
+            columnName: integration_account_id

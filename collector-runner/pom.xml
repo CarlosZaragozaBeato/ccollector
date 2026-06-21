@@ -14,13 +14,13 @@
 
     <artifactId>collector-runner</artifactId>
     <description>
-        Punto de entrada del daemon. Quarkus runtime, scheduling, observabilidad.
-        Único módulo con quarkus-maven-plugin — aquí vive el proceso.
+        Daemon entry point. Quarkus runtime, scheduling, and observability.
+        The only module with quarkus-maven-plugin; it hosts the process.
     </description>
 
     <dependencies>
 
-        <!-- ===== MÓDULOS INTERNOS ===== -->
+        <!-- ===== INTERNAL MODULES ===== -->
         <dependency>
             <groupId>com.zensyra</groupId>
             <artifactId>collector-core</artifactId>
@@ -33,15 +33,19 @@
             <groupId>com.zensyra</groupId>
             <artifactId>collector-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.zensyra</groupId>
+            <artifactId>collector-query</artifactId>
+        </dependency>
 
         <!-- ===== SCHEDULING ===== -->
-        <!-- Quartz con persistencia en PostgreSQL: los jobs sobreviven reinicios -->
+        <!-- Quartz persistence in PostgreSQL: jobs survive restarts. -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-quartz</artifactId>
         </dependency>
 
-        <!-- ===== OBSERVABILIDAD ===== -->
+        <!-- ===== OBSERVABILITY ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-health</artifactId>
@@ -98,7 +102,7 @@
 
     <build>
         <plugins>
-            <!-- Solo el runner compila y empaqueta como aplicación Quarkus -->
+            <!-- Only the runner builds and packages the Quarkus application. -->
             <plugin>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-maven-plugin</artifactId>

@@ -1,7 +1,6 @@
 package com.zensyra.collector.strava.job;
 
 import com.zensyra.collector.core.oauth.OAuthToken;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.activity.ActivityRepository;
 import com.zensyra.collector.strava.api.dto.StravaGearDto;
@@ -44,26 +43,27 @@ public class SyncGearJob extends AbstractStravaJob {
 
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
-        syncGearForUser(token.getExternalUserId());
+        syncGearForUser(token);
         return false;
     }
 
-    private void syncGearForUser(String externalUserId) {
+    private void syncGearForUser(OAuthToken token) {
+        String externalUserId = externalUserId(token);
         try {
-            String accessToken = tokenService.getValidToken(IntegrationSource.STRAVA, externalUserId);
+            String accessToken = validAccessToken(token);
 
-            // Obtener athleteId desde BD usando el externalUserId (stravaId del atleta)
+            // Obtain athleteId from the database using externalUserId (the athlete's stravaId).
             Long athleteStravaId = parseAthleteId(externalUserId);
             Long athleteId = athleteRepository.findByStravaId(athleteStravaId)
                     .map(Athlete::getStravaId)
                     .orElse(athleteStravaId);
 
-            // Obtener gear_ids distintos de las actividades de este atleta
+            // Obtain distinct gear_ids from this athlete's activities.
             List<String> gearIds = activityRepository
                     .findDistinctGearIdsByAthleteId(athleteStravaId);
 
             if (gearIds.isEmpty()) {
-                LOG.infof("SyncGearJob: no hay gear_ids en actividades para usuario '%s'", externalUserId);
+                LOG.infof("SyncGearJob: no gear_ids in activities for user '%s'", externalUserId);
                 return;
             }
 
@@ -75,14 +75,14 @@ public class SyncGearJob extends AbstractStravaJob {
                     gearUpsertService.upsert(dto, athleteId);
                     synced++;
                 } catch (Exception e) {
-                    LOG.warnf("No se pudo sincronizar gear '%s': %s", gearId, e.getMessage());
+                    LOG.warnf("Could not synchronize gear '%s': %s", gearId, e.getMessage());
                 }
             }
 
-            LOG.infof("SyncGearJob completado — usuario: '%s', gears sincronizados: %d", externalUserId, synced);
+            LOG.infof("SyncGearJob completed — user: '%s', synchronized gear: %d", externalUserId, synced);
 
         } catch (Exception e) {
-            LOG.errorf(e, "Error en SyncGearJob para usuario '%s'", externalUserId);
+            LOG.errorf(e, "Error in SyncGearJob for user '%s'", externalUserId);
             throw e;
         }
     }

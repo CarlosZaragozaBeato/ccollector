@@ -1,7 +1,6 @@
 package com.zensyra.collector.strava.job;
 
 import com.zensyra.collector.core.oauth.OAuthToken;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.api.dto.StravaAthleteZonesDto;
 import com.zensyra.collector.strava.athletezone.AthleteZoneUpsertService;
@@ -29,19 +28,19 @@ public class SyncAthleteZonesJob extends AbstractStravaJob {
 
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
-        String externalUserId = token.getExternalUserId();
+        String externalUserId = externalUserId(token);
         try {
-            String accessToken = tokenService.getValidToken(IntegrationSource.STRAVA, externalUserId);
+            String accessToken = validAccessToken(token);
             StravaAthleteZonesDto dto = stravaApiClient.getAthleteZones("Bearer " + accessToken);
             Long athleteStravaId = parseAthleteId(externalUserId);
 
             athleteZoneUpsertService.replaceZones(athleteStravaId, dto);
             int hrZones = dto != null ? dto.getHeartRateZones().size() : 0;
             int powerZones = dto != null ? dto.getPowerZones().size() : 0;
-            LOG.infof("SyncAthleteZonesJob completado — usuario: '%s', hrZones=%d, powerZones=%d",
+            LOG.infof("SyncAthleteZonesJob completed — user: '%s', hrZones=%d, powerZones=%d",
                     externalUserId, hrZones, powerZones);
         } catch (Exception e) {
-            LOG.errorf(e, "Error sincronizando athlete zones para usuario '%s'", externalUserId);
+            LOG.errorf(e, "Error synchronizing athlete zones for user '%s'", externalUserId);
             throw e;
         }
         return false;

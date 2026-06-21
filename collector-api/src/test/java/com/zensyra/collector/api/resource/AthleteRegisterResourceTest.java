@@ -3,6 +3,9 @@ package com.zensyra.collector.api.resource;
 import com.zensyra.collector.api.oauth.StravaOAuthExchangeException;
 import com.zensyra.collector.api.oauth.StravaOAuthService;
 import com.zensyra.collector.api.oauth.StravaOAuthToken;
+import com.zensyra.collector.core.identity.AthleteProfileRepository;
+import com.zensyra.collector.core.identity.IntegrationAccount;
+import com.zensyra.collector.core.identity.IntegrationAccountRepository;
 import com.zensyra.collector.core.oauth.OAuthToken;
 import com.zensyra.collector.core.oauth.OAuthTokenRepository;
 import com.zensyra.collector.core.sync.IntegrationSource;
@@ -32,9 +35,19 @@ class AthleteRegisterResourceTest {
     @Inject
     OAuthTokenRepository tokenRepository;
 
+    @Inject
+    IntegrationAccountRepository integrationAccountRepository;
+
+    @Inject
+    AthleteProfileRepository athleteProfileRepository;
+
     @BeforeEach
     void cleanDb() {
-        QuarkusTransaction.requiringNew().run(tokenRepository::deleteAll);
+        QuarkusTransaction.requiringNew().run(() -> {
+            tokenRepository.deleteAll();
+            integrationAccountRepository.deleteAll();
+            athleteProfileRepository.deleteAll();
+        });
     }
 
     @Test
@@ -66,9 +79,17 @@ class AthleteRegisterResourceTest {
                 .body("expiresAt", is(expiresAt.toString()));
 
         OAuthToken saved = tokenRepository.findBySourceAndUser(IntegrationSource.STRAVA, ATHLETE_ID).orElseThrow();
+        IntegrationAccount account = integrationAccountRepository
+                .findBySourceAndExternalUserId(IntegrationSource.STRAVA, ATHLETE_ID)
+                .orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals("access-1", saved.getAccessToken());
         org.junit.jupiter.api.Assertions.assertEquals("refresh-1", saved.getRefreshToken());
         org.junit.jupiter.api.Assertions.assertEquals(expiresAt, saved.getExpiresAt());
+        org.junit.jupiter.api.Assertions.assertEquals(account.getId(), saved.getIntegrationAccountId());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1,
+                tokenRepository.findAllBySource(IntegrationSource.STRAVA).size()
+        );
     }
 
     @Test

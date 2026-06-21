@@ -14,14 +14,14 @@ import java.security.MessageDigest;
 import java.util.Optional;
 
 /**
- * Valida el header X-API-Key en todas las rutas /api/v1/*.
- * El token se configura vía la variable de entorno COLLECTOR_API_KEY.
+ * Validates the X-API-Key header on every /api/v1/* route.
+ * The token is configured through the COLLECTOR_API_KEY environment variable.
  *
- * @ApplicationScoped es necesario en el binario nativo: sin CDI scope explícito,
- * Quarkus instancia el @Provider durante static-init (build time) e inyecta la
- * config con el valor vacío de build. Al arrancar con la env var real detecta
- * la discrepancia y falla. Con @ApplicationScoped la instanciación es lazy
- * (runtime), igual que AdminTriggerResource.
+ * @ApplicationScoped is required in the native binary: without an explicit CDI
+ * scope, Quarkus creates the @Provider during static initialization (build time)
+ * and injects the empty build-time configuration value. At startup, the real
+ * environment value differs and the application fails. @ApplicationScoped makes
+ * instantiation lazy (runtime), as it is for AdminTriggerResource.
  */
 @Provider
 @ApplicationScoped

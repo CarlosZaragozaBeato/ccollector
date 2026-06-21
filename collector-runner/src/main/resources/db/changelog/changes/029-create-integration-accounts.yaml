@@ -1,0 +1,79 @@
+databaseChangeLog:
+  - changeSet:
+      id: 029-create-integration-accounts
+      author: zensyra
+      comment: Creates provider accounts linked to the canonical athlete identity in the multi-integration model.
+      changes:
+        - createTable:
+            tableName: integration_accounts
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_integration_accounts
+                    nullable: false
+              - column:
+                  name: athlete_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: source
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: external_user_id
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: connection_status
+                  type: VARCHAR(32)
+                  defaultValue: ACTIVE
+                  constraints:
+                    nullable: false
+                    checkConstraint: "connection_status IN ('ACTIVE', 'PAUSED', 'REAUTH_REQUIRED', 'DISCONNECTED')"
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: integration_accounts
+            baseColumnNames: athlete_id
+            referencedTableName: athlete_profiles
+            referencedColumnNames: id
+            constraintName: fk_integration_accounts_athlete_id
+        - addUniqueConstraint:
+            tableName: integration_accounts
+            columnNames: source, external_user_id
+            constraintName: uq_integration_accounts_source_external_user
+            # NOTE: PostgreSQL automatically creates a unique index to back this
+            # constraint. Do not add a separate createIndex on (source, external_user_id):
+            # it would be a redundant duplicate index, doubling write cost for no query benefit.
+        - createIndex:
+            tableName: integration_accounts
+            indexName: idx_integration_accounts_athlete_id
+            columns:
+              - column:
+                  name: athlete_id
+      rollback:
+        - dropIndex:
+            tableName: integration_accounts
+            indexName: idx_integration_accounts_athlete_id
+        - dropUniqueConstraint:
+            tableName: integration_accounts
+            constraintName: uq_integration_accounts_source_external_user
+        - dropForeignKeyConstraint:
+            baseTableName: integration_accounts
+            constraintName: fk_integration_accounts_athlete_id
+        - dropTable:
+            tableName: integration_accounts

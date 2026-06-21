@@ -5,6 +5,8 @@ import com.zensyra.collector.api.dto.AthleteRegisterResponseDto;
 import com.zensyra.collector.api.oauth.StravaOAuthExchangeException;
 import com.zensyra.collector.api.oauth.StravaOAuthService;
 import com.zensyra.collector.api.oauth.StravaOAuthToken;
+import com.zensyra.collector.core.identity.AthleteIdentityService;
+import com.zensyra.collector.core.identity.IntegrationAccount;
 import com.zensyra.collector.core.oauth.OAuthToken;
 import com.zensyra.collector.core.oauth.OAuthTokenRepository;
 import com.zensyra.collector.core.sync.IntegrationSource;
@@ -31,6 +33,9 @@ public class AthleteRegisterResource {
     @Inject
     OAuthTokenRepository tokenRepository;
 
+    @Inject
+    AthleteIdentityService athleteIdentityService;
+
     @POST
     @Transactional
     public Response register(@Valid AthleteRegisterRequestDto request) {
@@ -38,14 +43,23 @@ public class AthleteRegisterResource {
             StravaOAuthToken stravaToken = stravaOAuthService
                     .exchangeAuthorizationCode(request.getCode(), request.getRedirectUri());
 
+            IntegrationAccount integrationAccount = athleteIdentityService.resolveOrCreateAccount(
+                    IntegrationSource.STRAVA,
+                    stravaToken.athleteId()
+            );
+
             OAuthToken token = tokenRepository
-                    .findBySourceAndUser(IntegrationSource.STRAVA, stravaToken.athleteId())
+                    .findByIntegrationAccountId(integrationAccount.getId())
+                    .or(() -> tokenRepository.findBySourceAndUser(
+                            integrationAccount.getSource(),
+                            integrationAccount.getExternalUserId()))
                     .orElseGet(OAuthToken::new);
 
             boolean created = token.getId() == null;
 
-            token.setSource(IntegrationSource.STRAVA);
-            token.setExternalUserId(stravaToken.athleteId());
+            token.setIntegrationAccountId(integrationAccount.getId());
+            token.setSource(integrationAccount.getSource());
+            token.setExternalUserId(integrationAccount.getExternalUserId());
             token.setAccessToken(stravaToken.accessToken());
             token.setRefreshToken(stravaToken.refreshToken());
             token.setExpiresAt(stravaToken.expiresAt());

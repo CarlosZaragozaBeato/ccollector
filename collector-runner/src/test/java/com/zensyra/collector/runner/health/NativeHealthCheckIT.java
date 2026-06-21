@@ -8,10 +8,10 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 
 /**
- * Corre contra el binario nativo ya compilado — solo se ejecuta con -Pnative (mvn verify).
- * Ignorado completamente en mvn test (JVM mode).
+ * Runs against the already-built native binary — only runs with -Pnative (mvn verify).
+ * Fully ignored by mvn test (JVM mode).
  *
- * Verifica que el binario nativo arranca y responde correctamente a los health checks.
+ * Verifies that the native binary starts and responds correctly to health checks.
  */
 @QuarkusIntegrationTest
 class NativeHealthCheckIT {

@@ -6,6 +6,7 @@ import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "oauth_tokens")
@@ -21,6 +22,9 @@ public class OAuthToken extends PanacheEntityBase {
 
     @Column(name="external_user_id",nullable = false)
     private String externalUserId;
+
+    @Column(name = "integration_account_id")
+    private UUID integrationAccountId;
 
     @Convert(converter = AesGcmAttributeConverter.class)
     @Column(name="access_token", nullable = false, length = 512)
@@ -77,6 +81,14 @@ public class OAuthToken extends PanacheEntityBase {
 
     public void setExternalUserId(String externalUserId) {
         this.externalUserId = externalUserId;
+    }
+
+    public UUID getIntegrationAccountId() {
+        return integrationAccountId;
+    }
+
+    public void setIntegrationAccountId(UUID integrationAccountId) {
+        this.integrationAccountId = integrationAccountId;
     }
 
     public String getAccessToken() {

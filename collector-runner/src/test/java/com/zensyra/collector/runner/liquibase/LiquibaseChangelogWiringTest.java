@@ -16,6 +16,12 @@ class LiquibaseChangelogWiringTest {
         assertNotNull(resource("db/changelog/db.changelog-strava.yaml"));
         assertNotNull(resource("db/changelog/changes/012-create-activity-streams.yaml"));
         assertNotNull(resource("db/changelog/changes/013-expand-activities-stream-sync.yaml"));
+        assertNotNull(resource("db/changelog/changes/028-create-athlete-profiles.yaml"));
+        assertNotNull(resource("db/changelog/changes/029-create-integration-accounts.yaml"));
+        assertNotNull(resource("db/changelog/changes/030-create-training-sessions.yaml"));
+        assertNotNull(resource("db/changelog/changes/031-create-activity-references.yaml"));
+        assertNotNull(resource("db/changelog/changes/032-link-oauth-tokens-to-integration-accounts.yaml"));
+        assertNotNull(resource("db/changelog/changes/033-backfill-strava-canonical-data.yaml"));
     }
 
     @Test
@@ -26,6 +32,12 @@ class LiquibaseChangelogWiringTest {
         assertTrue(master.contains("file: db/changelog/db.changelog-strava.yaml"));
         assertTrue(strava.contains("file: db/changelog/changes/012-create-activity-streams.yaml"));
         assertTrue(strava.contains("file: db/changelog/changes/013-expand-activities-stream-sync.yaml"));
+        assertTrue(master.contains("file: db/changelog/changes/028-create-athlete-profiles.yaml"));
+        assertTrue(master.contains("file: db/changelog/changes/029-create-integration-accounts.yaml"));
+        assertTrue(master.contains("file: db/changelog/changes/030-create-training-sessions.yaml"));
+        assertTrue(master.contains("file: db/changelog/changes/031-create-activity-references.yaml"));
+        assertTrue(master.contains("file: db/changelog/changes/032-link-oauth-tokens-to-integration-accounts.yaml"));
+        assertTrue(master.contains("file: db/changelog/changes/033-backfill-strava-canonical-data.yaml"));
         assertTrue(!master.contains("includeAll"));
         assertTrue(!strava.contains("includeAll"));
     }

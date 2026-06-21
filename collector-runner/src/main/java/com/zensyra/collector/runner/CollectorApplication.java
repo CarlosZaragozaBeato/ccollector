@@ -5,12 +5,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
 public class CollectorApplication {
-    // Clase marcadora — fuerza la inicialización del contexto CDI
-    // en el módulo runner y permite el descubrimiento de beans
-    // de los módulos dependientes (core, strava).
+    // Marker class: initializes the CDI context in the runner module and enables
+    // discovery of beans from dependent modules (core and Strava).
 
     @Scheduled(cron = "0 0 0 1 1 ? 2099")
     void schedulerBootstrap() {
-        // nunca se ejecuta
+        // never executed
     }
 }

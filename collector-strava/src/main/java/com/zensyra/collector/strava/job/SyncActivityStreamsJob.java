@@ -1,7 +1,6 @@
 package com.zensyra.collector.strava.job;
 
 import com.zensyra.collector.core.oauth.OAuthToken;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.activity.Activity;
 import com.zensyra.collector.strava.activity.ActivityRepository;
@@ -67,17 +66,18 @@ public class SyncActivityStreamsJob extends AbstractStravaJob {
 
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
-        return syncStreamsForUser(token.getExternalUserId());
+        return syncStreamsForUser(token);
     }
 
-    private boolean syncStreamsForUser(String externalUserId) {
-        String accessToken = tokenService.getValidToken(IntegrationSource.STRAVA, externalUserId);
+    private boolean syncStreamsForUser(OAuthToken token) {
+        String externalUserId = externalUserId(token);
+        String accessToken = validAccessToken(token);
         Long athleteStravaId = parseAthleteId(externalUserId);
         List<Activity> pendingActivities = activityRepository
                 .findPendingStreamActivitiesByAthleteId(athleteStravaId, retryLimit, batchSize);
 
         if (pendingActivities.isEmpty()) {
-            LOG.infof("SyncActivityStreamsJob: no hay actividades pendientes para '%s'", externalUserId);
+            LOG.infof("SyncActivityStreamsJob: no activities are pending for '%s'", externalUserId);
             return false;
         }
 
@@ -107,7 +107,7 @@ public class SyncActivityStreamsJob extends AbstractStravaJob {
             metrics.incrementActivityStreamRowsWritten(result.rowsWritten());
             MDC.put("streamRows", result.rowsWritten());
             MDC.put("status", result.status().name());
-            LOG.infof("Streams sincronizados activityId=%d streamRows=%d attempt=%d status=%s",
+            LOG.infof("Streams synchronized activityId=%d streamRows=%d attempt=%d status=%s",
                     activityStravaId, result.rowsWritten(), nextAttempt, result.status().name());
             return false;
         } catch (WebApplicationException e) {
@@ -122,14 +122,14 @@ public class SyncActivityStreamsJob extends AbstractStravaJob {
             metrics.incrementActivityStreamSyncErrors();
             activityStreamSyncService.markFailure(activityStravaId, e.getMessage());
             MDC.put("status", "FAILED");
-            LOG.warnf("Error sincronizando streams activityId=%d attempt=%d status=FAILED error=%s",
+            LOG.warnf("Error synchronizing streams activityId=%d attempt=%d status=FAILED error=%s",
                     activityStravaId, nextAttempt, e.getMessage());
             return false;
         } catch (Exception e) {
             metrics.incrementActivityStreamSyncErrors();
             activityStreamSyncService.markFailure(activityStravaId, e.getMessage());
             MDC.put("status", "FAILED");
-            LOG.warnf("Error sincronizando streams activityId=%d attempt=%d status=FAILED error=%s",
+            LOG.warnf("Error synchronizing streams activityId=%d attempt=%d status=FAILED error=%s",
                     activityStravaId, nextAttempt, e.getMessage());
             return false;
         } finally {

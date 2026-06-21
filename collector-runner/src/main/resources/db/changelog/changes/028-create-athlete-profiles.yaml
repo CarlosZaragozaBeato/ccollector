@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 028-create-athlete-profiles
+      author: zensyra
+      comment: Creates the provider-independent canonical athlete identity for multi-integration data.
+      changes:
+        - createTable:
+            tableName: athlete_profiles
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_athlete_profiles
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropTable:
+            tableName: athlete_profiles
