@@ -42,6 +42,15 @@ class CanonicalIdentitySchemaMigrationIT {
                     applyChangeLog(connection, changeLog);
                 }
 
+                // Liquibase manages its own transactions over this connection while
+                // applying changesets and may leave autoCommit disabled afterward.
+                // The assertions below run several independent SQL statements,
+                // including some that deliberately trigger constraint violations
+                // inside assertThrows — without autocommit, a single failed
+                // statement poisons the transaction for every statement that
+                // follows, even ones wrapped in their own assertThrows.
+                connection.setAutoCommit(true);
+
                 assertCoreTablesAndConstraintsExist(connection);
                 assertCoreIndexesExist(connection);
                 assertNoRedundantUniqueIndex(connection);

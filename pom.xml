@@ -60,14 +60,10 @@
                 <artifactId>postgresql</artifactId>
                 <version>${testcontainers.version}</version>
             </dependency>
-
-            <!-- Quarkus BOM manages all extension versions. -->
             <dependency>
-                <groupId>${quarkus.platform.group-id}</groupId>
-                <artifactId>${quarkus.platform.artifact-id}</artifactId>
-                <version>${quarkus.platform.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers</artifactId>
+                <version>${testcontainers.version}</version>
             </dependency>
 
             <!-- Quarkus BOM manages all extension versions. -->

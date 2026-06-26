@@ -105,11 +105,17 @@ databaseChangeLog:
 
               INSERT INTO training_sessions (id, athlete_id, created_at, updated_at)
               SELECT
-                (... md5('training-session:STRAVA:' || a.strava_id::VARCHAR) ...)::UUID,
+                (
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 1, 8) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 9, 4) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 13, 4) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 17, 4) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 21, 12)
+                )::UUID,
                 ia.athlete_id, a.created_at, a.updated_at
               FROM activities a
-              JOIN integration_accounts ia ON
-              ON ia.source = 'STRAVA'
+              JOIN integration_accounts ia
+                ON ia.source = 'STRAVA'
                AND ia.external_user_id = a.athlete_id::VARCHAR(255)
               ON CONFLICT (id) DO NOTHING;
 

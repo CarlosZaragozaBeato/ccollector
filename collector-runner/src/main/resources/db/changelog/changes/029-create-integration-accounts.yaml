@@ -35,7 +35,6 @@ databaseChangeLog:
                   defaultValue: ACTIVE
                   constraints:
                     nullable: false
-                    checkConstraint: "connection_status IN ('ACTIVE', 'PAUSED', 'REAUTH_REQUIRED', 'DISCONNECTED')"
               - column:
                   name: created_at
                   type: TIMESTAMPTZ
@@ -46,6 +45,11 @@ databaseChangeLog:
                   type: TIMESTAMPTZ
                   constraints:
                     nullable: false
+        - sql:
+            sql: >-
+              ALTER TABLE integration_accounts
+              ADD CONSTRAINT chk_integration_accounts_connection_status
+              CHECK (connection_status IN ('ACTIVE', 'PAUSED', 'REAUTH_REQUIRED', 'DISCONNECTED'))
         - addForeignKeyConstraint:
             baseTableName: integration_accounts
             baseColumnNames: athlete_id
@@ -72,6 +76,10 @@ databaseChangeLog:
         - dropUniqueConstraint:
             tableName: integration_accounts
             constraintName: uq_integration_accounts_source_external_user
+        - sql:
+            sql: >-
+              ALTER TABLE integration_accounts
+              DROP CONSTRAINT chk_integration_accounts_connection_status
         - dropForeignKeyConstraint:
             baseTableName: integration_accounts
             constraintName: fk_integration_accounts_athlete_id
