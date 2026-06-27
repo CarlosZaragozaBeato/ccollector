@@ -69,7 +69,7 @@ public class AthleteRegisterResource {
             }
 
             AthleteRegisterResponseDto response = new AthleteRegisterResponseDto(
-                    stravaToken.athleteId(),
+                    integrationAccount.getAthleteId().toString(),
                     created,
                     stravaToken.expiresAt()
             );

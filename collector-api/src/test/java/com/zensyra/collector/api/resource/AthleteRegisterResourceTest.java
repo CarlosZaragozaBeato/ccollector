@@ -61,7 +61,7 @@ class AthleteRegisterResourceTest {
                         expiresAt
                 ));
 
-        given()
+        String responseAthleteId = given()
                 .header("X-API-Key", API_KEY)
                 .contentType("application/json")
                 .body("""
@@ -74,14 +74,15 @@ class AthleteRegisterResourceTest {
                 .post("/api/v1/athletes/register")
                 .then()
                 .statusCode(201)
-                .body("athleteId", is(ATHLETE_ID))
                 .body("created", is(true))
-                .body("expiresAt", is(expiresAt.toString()));
+                .body("expiresAt", is(expiresAt.toString()))
+                .extract().path("athleteId");
 
         OAuthToken saved = tokenRepository.findBySourceAndUser(IntegrationSource.STRAVA, ATHLETE_ID).orElseThrow();
         IntegrationAccount account = integrationAccountRepository
                 .findBySourceAndExternalUserId(IntegrationSource.STRAVA, ATHLETE_ID)
                 .orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(account.getAthleteId().toString(), responseAthleteId);
         org.junit.jupiter.api.Assertions.assertEquals("access-1", saved.getAccessToken());
         org.junit.jupiter.api.Assertions.assertEquals("refresh-1", saved.getRefreshToken());
         org.junit.jupiter.api.Assertions.assertEquals(expiresAt, saved.getExpiresAt());
@@ -111,7 +112,7 @@ class AthleteRegisterResourceTest {
                         newExpiry
                 ));
 
-        given()
+        String responseAthleteId = given()
                 .header("X-API-Key", API_KEY)
                 .contentType("application/json")
                 .body("""
@@ -123,9 +124,14 @@ class AthleteRegisterResourceTest {
                 .post("/api/v1/athletes/register")
                 .then()
                 .statusCode(200)
-                .body("athleteId", is(ATHLETE_ID))
                 .body("created", is(false))
-                .body("expiresAt", is(newExpiry.toString()));
+                .body("expiresAt", is(newExpiry.toString()))
+                .extract().path("athleteId");
+
+        IntegrationAccount account = integrationAccountRepository
+                .findBySourceAndExternalUserId(IntegrationSource.STRAVA, ATHLETE_ID)
+                .orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(account.getAthleteId().toString(), responseAthleteId);
 
         OAuthToken updated = tokenRepository.findBySourceAndUser(IntegrationSource.STRAVA, ATHLETE_ID).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals("new-access", updated.getAccessToken());

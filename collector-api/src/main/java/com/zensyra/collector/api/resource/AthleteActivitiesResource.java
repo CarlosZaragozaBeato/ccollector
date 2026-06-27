@@ -1,10 +1,15 @@
 package com.zensyra.collector.api.resource;
 
 import com.zensyra.collector.api.dto.ActivityDto;
-import com.zensyra.collector.strava.activity.ActivityRepository;
+import com.zensyra.collector.query.composer.ActivityQueryComposer;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -12,6 +17,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Path("/api/v1/athletes/{athleteId}/activities")
 @Produces(MediaType.APPLICATION_JSON)
@@ -19,11 +25,11 @@ import java.util.Map;
 public class AthleteActivitiesResource {
 
     @Inject
-    ActivityRepository activityRepository;
+    ActivityQueryComposer activityQueryComposer;
 
     @GET
     public Response list(
-            @PathParam("athleteId") Long athleteId,
+            @PathParam("athleteId") UUID athleteId,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue("20") int size,
             @QueryParam("type") String type,
@@ -47,8 +53,8 @@ public class AthleteActivitiesResource {
                     "Invalid date format. Expected ISO 8601 (e.g. 2025-01-01T00:00:00Z)");
         }
 
-        List<ActivityDto> items = activityRepository
-                .findPagedByAthleteId(athleteId, type, fromInstant, toInstant, page * size, size)
+        List<ActivityDto> items = activityQueryComposer
+                .listByAthlete(athleteId, type, fromInstant, toInstant, page * size, size)
                 .stream()
                 .map(ActivityDto::from)
                 .toList();
