@@ -1,7 +1,6 @@
 package com.zensyra.collector.strava.job;
 
 import com.zensyra.collector.core.oauth.OAuthToken;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.activity.ActivityRepository;
 import com.zensyra.collector.strava.activity.ActivityUpsertService;
@@ -48,11 +47,12 @@ public class SyncActivitiesJob extends AbstractStravaJob {
 
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
-        Long athleteStravaId = parseAthleteId(token.getExternalUserId());
+        String externalUserId = externalUserId(token);
+        Long athleteStravaId = parseAthleteId(externalUserId);
         long afterEpoch = resolveAfterEpoch(athleteStravaId);
         boolean isFirstRun = context.lastRunAt() == null
                 && activityRepository.findMaxStartDateByAthleteId(athleteStravaId).isEmpty();
-        syncActivitiesForUser(token.getExternalUserId(), afterEpoch, isFirstRun);
+        syncActivitiesForUser(token, externalUserId, afterEpoch, isFirstRun);
         return false;
     }
 
@@ -63,9 +63,13 @@ public class SyncActivitiesJob extends AbstractStravaJob {
                 .orElseGet(() -> Instant.now().minus(30, ChronoUnit.DAYS).getEpochSecond());
     }
 
-    private void syncActivitiesForUser(String externalUserId, long afterEpoch, boolean isFirstRun) {
+    private void syncActivitiesForUser(
+            OAuthToken token,
+            String externalUserId,
+            long afterEpoch,
+            boolean isFirstRun) {
         try {
-            String accessToken = tokenService.getValidToken(IntegrationSource.STRAVA, externalUserId);
+            String accessToken = validAccessToken(token);
             int totalSynced = 0;
 
             if (isFirstRun) {
@@ -80,7 +84,7 @@ public class SyncActivitiesJob extends AbstractStravaJob {
                     } catch (WebApplicationException e) {
                         if (e.getResponse() != null && e.getResponse().getStatus() == HTTP_TOO_MANY_REQUESTS) {
                             metrics.incrementRateLimitHits();
-                            LOG.warnf("Strava 429 en página %d — abortando paginación para usuario '%s'",
+                            LOG.warnf("Strava 429 on page %d — aborting pagination for user '%s'",
                                     page, externalUserId);
                             break;
                         }
@@ -94,7 +98,7 @@ public class SyncActivitiesJob extends AbstractStravaJob {
                         totalSynced++;
                     }
 
-                    LOG.infof("SyncActivitiesJob — usuario: '%s', página %d, %d actividades procesadas",
+                    LOG.infof("SyncActivitiesJob — user: '%s', page %d, %d activities processed",
                             externalUserId, page, dtos.size());
 
                     if (dtos.size() < PER_PAGE) break;
@@ -112,11 +116,11 @@ public class SyncActivitiesJob extends AbstractStravaJob {
                 }
             }
 
-            LOG.infof("SyncActivitiesJob completado — usuario: '%s', total sincronizadas: %d",
+            LOG.infof("SyncActivitiesJob completed — user: '%s', total synchronized: %d",
                     externalUserId, totalSynced);
 
         } catch (Exception e) {
-            LOG.errorf(e, "Error sincronizando actividades para usuario '%s'", externalUserId);
+            LOG.errorf(e, "Error synchronizing activities for user '%s'", externalUserId);
             throw e;
         }
     }

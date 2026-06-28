@@ -30,13 +30,13 @@ class TokenBucketRateLimiterTest {
 
     @Test
     void shouldBlockWhenEmpty() throws Exception {
-        var limiter = new TokenBucketRateLimiter(1, 1); // refill cada 1 segundo
-        limiter.acquire(); // vacía el bucket
+        var limiter = new TokenBucketRateLimiter(1, 1); // refill every second
+        limiter.acquire(); // empty the bucket
 
         var acquired = new AtomicBoolean(false);
         var thread = new Thread(() -> {
             try {
-                limiter.acquire(); // debe bloquearse ~1s
+                limiter.acquire(); // should block for ~1 second
                 acquired.set(true);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -44,11 +44,11 @@ class TokenBucketRateLimiterTest {
         });
         thread.start();
 
-        // En 200ms no debería haber adquirido (bucket vacío)
+        // It should not have acquired within 200 ms (empty bucket).
         Thread.sleep(200);
         assertFalse(acquired.get());
 
-        // En 1500ms sí debería (refill a los 1000ms)
+        // It should have acquired within 1,500 ms (refill at 1,000 ms).
         thread.join(1500);
         assertTrue(acquired.get());
         limiter.shutdown();
@@ -57,8 +57,8 @@ class TokenBucketRateLimiterTest {
     @Test
     void shouldNotExceedMaxPermits() throws InterruptedException {
         var limiter = new TokenBucketRateLimiter(3, 1);
-        Thread.sleep(5000); // espera 5 ciclos de refill
-        assertEquals(3, limiter.availablePermits()); // no supera el máximo
+        Thread.sleep(5000); // wait for five refill cycles
+        assertEquals(3, limiter.availablePermits()); // does not exceed the maximum
         limiter.shutdown();
     }
 

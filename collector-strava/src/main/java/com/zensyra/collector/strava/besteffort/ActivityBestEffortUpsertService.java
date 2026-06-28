@@ -1,6 +1,8 @@
 package com.zensyra.collector.strava.besteffort;
 
+import com.zensyra.collector.strava.activity.Activity;
 import com.zensyra.collector.strava.api.dto.StravaBestEffortDto;
+import com.zensyra.collector.strava.identity.StravaActivityIdentityService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -16,13 +18,19 @@ public class ActivityBestEffortUpsertService {
     @Inject
     ActivityBestEffortRepository repository;
 
+    @Inject
+    StravaActivityIdentityService activityIdentityService;
+
     @Transactional
-    public void upsertBestEfforts(Long activityStravaId, List<StravaBestEffortDto> dtos) {
+    public void upsertBestEfforts(Activity activity, List<StravaBestEffortDto> dtos) {
         if (dtos == null || dtos.isEmpty()) return;
+
+        Long activityStravaId = activity.getStravaId();
+        activityIdentityService.resolveOrCreateReference(activity.getAthleteId(), activityStravaId);
 
         long deleted = repository.deleteByActivityStravaId(activityStravaId);
         if (deleted > 0) {
-            LOG.debugf("ActivityBestEffortUpsertService: eliminados %d best efforts previos para actividad %d",
+            LOG.debugf("ActivityBestEffortUpsertService: deleted %d previous best efforts for activity %d",
                     deleted, activityStravaId);
         }
 
@@ -39,7 +47,7 @@ public class ActivityBestEffortUpsertService {
             repository.persist(effort);
         }
 
-        LOG.debugf("ActivityBestEffortUpsertService: %d best efforts insertados para actividad %d",
+        LOG.debugf("ActivityBestEffortUpsertService: inserted %d best efforts for activity %d",
                 dtos.size(), activityStravaId);
     }
 }

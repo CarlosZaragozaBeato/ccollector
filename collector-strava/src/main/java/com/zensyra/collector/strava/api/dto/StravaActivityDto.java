@@ -82,7 +82,7 @@ public class StravaActivityDto {
         return id instanceof Number n ? n.longValue() : null;
     }
 
-    // --- start/end latlng como string "lat,lng" ---
+    // --- start/end latlng as a "lat,lng" string ---
     public String getStartLatlngAsString() {
         if (startLatlng == null || startLatlng.size() < 2) return null;
         return startLatlng.get(0) + "," + startLatlng.get(1);

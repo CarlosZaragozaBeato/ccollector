@@ -1,56 +1,56 @@
 -- ============================================================
 -- ZENSYRA COLLECTOR — STRAVA RUNNING ANALYTICS
--- Análisis completo de rendimiento para atleta de running
+-- Complete performance analytics for a running athlete
 -- ============================================================
--- Estructura:
---   [A] Utilidades y zonas FC estimadas
---   [B] Análisis histórico total
---   [C] Análisis de últimos N meses (rolling)
---   [D] Análisis del mes actual
---   [E] Análisis semana anterior
---   [F] Análisis semana actual
+-- Structure:
+--   [A] Utilities and estimated heart-rate zones
+--   [B] All-time historical analysis
+--   [C] Last N months analysis (rolling)
+--   [D] Current month analysis
+--   [E] Previous week analysis
+--   [F] Current week analysis
 -- ============================================================
--- CONVENCIONES:
---   - Todas las fechas se muestran en Europe/Madrid
---   - Ritmo en formato MM:SS /km (calculado desde average_speed en m/s)
---   - Zonas FC estimadas con fórmula: FC_max = 220 - edad (configurable)
---   - Solo sport_type IN ('Run','VirtualRun','TrailRun','Hike') salvo se indique
---   - Se filtra trainer = false salvo análisis de carga total
+-- CONVENTIONS:
+--   - All dates are shown in Europe/Madrid.
+--   - Pace uses MM:SS/km (calculated from average_speed in m/s).
+--   - Estimated heart-rate zones use: max_hr = 220 - age (configurable).
+--   - Only sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike') unless noted.
+--   - trainer = false is filtered unless the analysis covers total load.
 -- ============================================================
 
 
 -- ============================================================
--- [A] UTILIDADES — ZONAS DE FRECUENCIA CARDÍACA ESTIMADAS
+-- [A] UTILITIES — ESTIMATED HEART-RATE ZONES
 -- ============================================================
--- INTERPRETACIÓN:
---   Sin FC máx real del atleta, estimamos 220 - edad.
---   Ajusta el valor de fc_max_estimada según el atleta real.
---   Las zonas siguen el modelo de 5 zonas de Karvonen simplificado:
---     Z1 Recuperación   < 60% FCmax
---     Z2 Base aeróbica  60–70% FCmax   ← zona clave de volumen
---     Z3 Tempo          70–80% FCmax
---     Z4 Umbral         80–90% FCmax   ← zona de calidad
+-- INTERPRETATION:
+--   Without the athlete's actual max HR, use an estimate of 220 - age.
+--   Adjust the maximum heart-rate value for the actual athlete.
+--   The zones follow a simplified five-zone Karvonen model:
+--     Z1 Recovery       < 60% max HR
+--     Z2 Aerobic base   60–70% max HR  ← key volume zone
+--     Z3 Tempo          70–80% max HR
+--     Z4 Threshold      80–90% max HR  ← quality zone
 --     Z5 VO2max         > 90% FCmax
 --
--- RECOMENDACIÓN: ~80% del volumen debería estar en Z1-Z2 (polarizado).
+-- RECOMMENDATION: approximately 80% of volume should be in Z1-Z2 (polarized).
 -- ============================================================
 
--- Función auxiliar: clasificar FC en zona (PostgreSQL)
--- Uso: SELECT fn_fc_zone(fc_media, 185) AS zona
-CREATE OR REPLACE FUNCTION fn_fc_zone(fc DECIMAL, fc_max DECIMAL)
+-- Helper function: classify heart rate into a zone (PostgreSQL).
+-- Usage: SELECT fn_hr_zone(avg_hr, 185) AS zone
+CREATE OR REPLACE FUNCTION fn_hr_zone(hr DECIMAL, max_hr DECIMAL)
 RETURNS TEXT AS $$
 BEGIN
-    IF fc IS NULL OR fc_max IS NULL OR fc_max = 0 THEN RETURN 'Sin dato'; END IF;
-    IF fc < fc_max * 0.60 THEN RETURN 'Z1-Recuperación';
-    ELSIF fc < fc_max * 0.70 THEN RETURN 'Z2-Base';
-    ELSIF fc < fc_max * 0.80 THEN RETURN 'Z3-Tempo';
-    ELSIF fc < fc_max * 0.90 THEN RETURN 'Z4-Umbral';
+    IF hr IS NULL OR max_hr IS NULL OR max_hr = 0 THEN RETURN 'No data'; END IF;
+    IF hr < max_hr * 0.60 THEN RETURN 'Z1-Recovery';
+    ELSIF hr < max_hr * 0.70 THEN RETURN 'Z2-Aerobic base';
+    ELSIF hr < max_hr * 0.80 THEN RETURN 'Z3-Tempo';
+    ELSIF hr < max_hr * 0.90 THEN RETURN 'Z4-Threshold';
     ELSE RETURN 'Z5-VO2max';
     END IF;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
--- Función auxiliar: convertir velocidad (m/s) → ritmo texto (MM:SS/km)
+-- Helper function: convert speed (m/s) to pace text (MM:SS/km).
 CREATE OR REPLACE FUNCTION fn_pace_text(speed_ms DECIMAL)
 RETURNS TEXT AS $$
 DECLARE
@@ -62,7 +62,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
--- Función auxiliar: segundos → HH:MM:SS
+-- Helper function: seconds to HH:MM:SS.
 CREATE OR REPLACE FUNCTION fn_duration_text(secs INTEGER)
 RETURNS TEXT AS $$
 BEGIN
@@ -75,288 +75,285 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 
 
 -- ============================================================
--- [B] ANÁLISIS HISTÓRICO TOTAL
+-- [B] ALL-TIME HISTORICAL ANALYSIS
 -- ============================================================
 
 
 -- ------------------------------------------------------------
--- B1. Resumen anual del atleta (toda la carrera deportiva)
+-- B1. Athlete annual summary (entire sporting career)
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Vista macro para ver la evolución año a año.
---   Métricas clave: volumen (km), carga (horas), eficiencia (ritmo medio vs FC).
---   El índice de eficiencia aeróbica (velocidad/FC) debe crecer con los años
---   si el atleta mejora su base aeróbica — más velocidad al mismo coste cardíaco.
---   Un suffer_score medio alto con poco km → sesiones muy intensas pero escaso volumen.
+-- INTERPRETATION:
+--   Macro view to see year-over-year progression.
+--   Key metrics: volume (km), load (hours), efficiency (average pace versus HR).
+--   The aerobic-efficiency index (speed/HR) should increase over time when the
+--   athlete improves their aerobic base: more speed at the same cardiac cost.
+--   A high average suffer_score with low distance means very intense, low-volume sessions.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_historic_annual_summary AS
 SELECT
-    EXTRACT(YEAR FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER AS anio,
-    COUNT(*)                                                                AS sesiones,
-    ROUND(SUM(a.distance) / 1000.0, 1)                                     AS km_totales,
-    ROUND(SUM(a.moving_time) / 3600.0, 1)                                  AS horas_totales,
-    fn_duration_text(ROUND(AVG(a.moving_time))::INTEGER)                   AS duracion_media_sesion,
-    ROUND(AVG(a.distance) / 1000.0, 2)                                     AS km_medio_sesion,
-    fn_pace_text(AVG(a.average_speed))                                      AS ritmo_medio,
-    ROUND(AVG(a.average_heartrate), 1)                                      AS fc_media,
-    ROUND(AVG(a.max_heartrate), 1)                                          AS fc_max_media,
-    ROUND(AVG(a.total_elevation_gain), 0)                                   AS desnivel_medio,
-    SUM(a.total_elevation_gain)                                             AS desnivel_acumulado,
-    SUM(a.calories)                                                         AS calorias_totales,
-    ROUND(AVG(a.suffer_score), 1)                                           AS suffer_medio,
-    -- Índice de eficiencia aeróbica: m/s por latido medio (mayor = mejor)
-    ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC, 5) AS eficiencia_aerobica,
-    -- Sesiones por semana promedio
-    ROUND(COUNT(*) / 52.0, 1)                                               AS sesiones_semana_avg
+    EXTRACT(YEAR FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER AS year,
+    COUNT(*)                                                               AS sessions,
+    ROUND(SUM(a.distance) / 1000.0, 1)                                    AS total_km,
+    ROUND(SUM(a.moving_time) / 3600.0, 1)                                 AS total_hours,
+    fn_duration_text(ROUND(AVG(a.moving_time))::INTEGER)                  AS avg_session_duration,
+    ROUND(AVG(a.distance) / 1000.0, 2)                                    AS avg_session_km,
+    fn_pace_text(AVG(a.average_speed))                                    AS avg_pace,
+    ROUND(AVG(a.average_heartrate), 1)                                    AS avg_hr,
+    ROUND(AVG(a.max_heartrate), 1)                                        AS avg_max_hr,
+    ROUND(AVG(a.total_elevation_gain), 0)                                 AS avg_elevation_gain,
+    SUM(a.total_elevation_gain)                                           AS accumulated_elevation_gain,
+    SUM(a.calories)                                                       AS total_calories,
+    ROUND(AVG(a.suffer_score), 1)                                         AS avg_suffer,
+    -- Aerobic-efficiency index: m/s per average heartbeat (higher is better).
+    ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC, 5) AS aerobic_efficiency,
+    -- Average sessions per week.
+    ROUND(COUNT(*) / 52.0, 1)                                             AS avg_sessions_per_week
 FROM activities a
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
   AND a.trainer = false
-GROUP BY anio
-ORDER BY anio DESC;
+GROUP BY year
+ORDER BY year DESC;
 
 
 -- ------------------------------------------------------------
--- B2. Progresión mensual histórica completa
+-- B2. Complete historical monthly progression
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Permite ver patrones de temporada (picos de volumen en primavera/otoño
---   típicos del corredor popular), períodos de lesión (caídas bruscas de km),
---   y la evolución del ritmo medio a lo largo de los años.
---   Comparar el mismo mes en distintos años es muy revelador.
+-- INTERPRETATION:
+--   Shows seasonal patterns (spring/autumn volume peaks typical of recreational
+--   runners), injury periods (sharp distance drops), and average pace progression.
+--   Comparing the same month across years is particularly informative.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_historic_monthly_progression AS
 SELECT
-    EXTRACT(YEAR FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER  AS anio,
-    EXTRACT(MONTH FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER AS mes,
-    TO_CHAR(a.start_date AT TIME ZONE 'Europe/Madrid', 'TMMonth')          AS nombre_mes,
-    COUNT(*)                                                                 AS sesiones,
-    ROUND(SUM(a.distance) / 1000.0, 1)                                      AS km_totales,
-    ROUND(SUM(a.moving_time) / 3600.0, 1)                                   AS horas_totales,
-    fn_pace_text(AVG(a.average_speed))                                       AS ritmo_medio,
-    ROUND(AVG(a.average_heartrate), 1)                                       AS fc_media,
-    SUM(a.total_elevation_gain)                                              AS desnivel_total,
-    SUM(a.calories)                                                          AS calorias_totales,
-    ROUND(AVG(a.suffer_score), 1)                                            AS suffer_medio,
-    -- Progresión de eficiencia mes a mes
-    ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC, 5) AS eficiencia_aerobica,
-    -- Volumen semanal equivalente (normalizado a 4 semanas)
-    ROUND(SUM(a.distance) / 1000.0 / 4.33, 1)                              AS km_semana_equiv
+    EXTRACT(YEAR FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER  AS year,
+    EXTRACT(MONTH FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER AS month,
+    TO_CHAR(a.start_date AT TIME ZONE 'Europe/Madrid', 'TMMonth')          AS month_name,
+    COUNT(*)                                                                AS sessions,
+    ROUND(SUM(a.distance) / 1000.0, 1)                                     AS total_km,
+    ROUND(SUM(a.moving_time) / 3600.0, 1)                                  AS total_hours,
+    fn_pace_text(AVG(a.average_speed))                                     AS avg_pace,
+    ROUND(AVG(a.average_heartrate), 1)                                     AS avg_hr,
+    SUM(a.total_elevation_gain)                                            AS total_elevation_gain,
+    SUM(a.calories)                                                        AS total_calories,
+    ROUND(AVG(a.suffer_score), 1)                                          AS avg_suffer,
+    -- Month-over-month efficiency progression.
+    ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC, 5) AS aerobic_efficiency,
+    -- Equivalent weekly volume (normalized to four weeks).
+    ROUND(SUM(a.distance) / 1000.0 / 4.33, 1)                              AS equivalent_weekly_km
 FROM activities a
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
   AND a.trainer = false
-GROUP BY anio, mes, nombre_mes
-ORDER BY anio DESC, mes DESC;
+GROUP BY year, month, month_name
+ORDER BY year DESC, month DESC;
 
 
 -- ------------------------------------------------------------
--- B3. Mejores marcas históricas (PRs estimados por segmento de distancia)
+-- B3. Historical best performances (estimated PRs by distance segment)
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   No tenemos tiempos oficiales de carrera, pero podemos estimar
---   el mejor rendimiento por rango de distancia a partir de las actividades.
---   Esto da una idea de los mejores ritmos sostenidos en cada franja.
---   Útil para detectar si el atleta ha mejorado o regresado en cada distancia.
---   NOTA: Para distancias de carrera exactas (10K, 21K, 42K) se filtra
---   por actividades dentro del ±5% de la distancia objetivo.
+-- INTERPRETATION:
+--   There are no official race times, but activities allow an estimate of the
+--   best performance for each distance range and its sustained pace.
+--   This helps identify improvement or regression at each distance.
+--   NOTE: Exact race distances (10K, 21K, 42K) use activities within ±5% of
+--   the target distance.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_historic_best_performances AS
 WITH categorized AS (
     SELECT
         a.strava_id,
         a.name,
-        a.start_date AT TIME ZONE 'Europe/Madrid' AS fecha,
+        a.start_date AT TIME ZONE 'Europe/Madrid' AS date,
         ROUND(a.distance / 1000.0, 2)             AS km,
         a.moving_time,
-        fn_duration_text(a.moving_time)            AS tiempo_total,
+        fn_duration_text(a.moving_time)            AS total_time,
         a.average_speed,
-        fn_pace_text(a.average_speed)              AS ritmo_medio,
-        a.average_heartrate                        AS fc_media,
-        a.total_elevation_gain                     AS desnivel,
+        fn_pace_text(a.average_speed)              AS avg_pace,
+        a.average_heartrate                        AS avg_hr,
+        a.total_elevation_gain                     AS elevation_gain,
         CASE
             WHEN a.distance BETWEEN 4750 AND 5250   THEN '5K'
             WHEN a.distance BETWEEN 9500 AND 10500  THEN '10K'
             WHEN a.distance BETWEEN 14250 AND 15750 THEN '15K'
-            WHEN a.distance BETWEEN 19000 AND 22000 THEN 'Media Maratón'
-            WHEN a.distance BETWEEN 40000 AND 44000 THEN 'Maratón'
+            WHEN a.distance BETWEEN 19000 AND 22000 THEN 'Half Marathon'
+            WHEN a.distance BETWEEN 40000 AND 44000 THEN 'Marathon'
             WHEN a.distance > 44000                  THEN 'Ultra'
             WHEN a.distance BETWEEN 3000 AND 4749   THEN 'Short (<5K)'
             ELSE NULL
-        END AS categoria_distancia,
+        END AS distance_category,
         ROW_NUMBER() OVER (
             PARTITION BY CASE
                 WHEN a.distance BETWEEN 4750 AND 5250   THEN '5K'
                 WHEN a.distance BETWEEN 9500 AND 10500  THEN '10K'
                 WHEN a.distance BETWEEN 14250 AND 15750 THEN '15K'
-                WHEN a.distance BETWEEN 19000 AND 22000 THEN 'Media Maratón'
-                WHEN a.distance BETWEEN 40000 AND 44000 THEN 'Maratón'
+                WHEN a.distance BETWEEN 19000 AND 22000 THEN 'Half Marathon'
+                WHEN a.distance BETWEEN 40000 AND 44000 THEN 'Marathon'
                 WHEN a.distance > 44000                  THEN 'Ultra'
             END
             ORDER BY a.average_speed DESC NULLS LAST
-        ) AS rank_velocidad
+        ) AS speed_rank
     FROM activities a
     WHERE a.sport_type IN ('Run', 'TrailRun')
       AND a.trainer = false
       AND a.average_speed IS NOT NULL
 )
 SELECT
-    categoria_distancia,
+    distance_category,
     strava_id,
-    name        AS actividad,
-    fecha,
+    name        AS activity,
+    date,
     km,
-    tiempo_total,
-    ritmo_medio AS mejor_ritmo,
-    fc_media,
-    desnivel
+    total_time,
+    avg_pace AS best_pace,
+    avg_hr,
+    elevation_gain
 FROM categorized
-WHERE rank_velocidad = 1
-  AND categoria_distancia IS NOT NULL
+WHERE speed_rank = 1
+  AND distance_category IS NOT NULL
 ORDER BY
-    CASE categoria_distancia
+    CASE distance_category
         WHEN '5K' THEN 1 WHEN '10K' THEN 2 WHEN '15K' THEN 3
-        WHEN 'Media Maratón' THEN 4 WHEN 'Maratón' THEN 5 WHEN 'Ultra' THEN 6
+        WHEN 'Half Marathon' THEN 4 WHEN 'Marathon' THEN 5 WHEN 'Ultra' THEN 6
         ELSE 7
     END;
 
 
 -- ------------------------------------------------------------
--- B4. Evolución de la eficiencia aeróbica (tendencia de forma)
+-- B4. Aerobic-efficiency progression (fitness trend)
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   La eficiencia aeróbica = velocidad media / FC media.
---   Si esta métrica SUBE con el tiempo → el atleta corre más rápido
---   al mismo coste cardíaco = mejora real de la forma.
---   Si BAJA → sobrecarga, fatiga acumulada o pérdida de forma.
---   Agrupar por trimestre da suficiente señal estadística.
+-- INTERPRETATION:
+--   Aerobic efficiency = average speed / average HR.
+--   If it rises over time, the athlete runs faster at the same cardiac cost.
+--   If it falls, it may indicate overload, accumulated fatigue, or lost fitness.
+--   Grouping by quarter provides enough statistical signal.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_historic_aerobic_efficiency AS
 SELECT
-    EXTRACT(YEAR FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER      AS anio,
-    EXTRACT(QUARTER FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER   AS trimestre,
+    EXTRACT(YEAR FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER      AS year,
+    EXTRACT(QUARTER FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER   AS quarter,
     CONCAT('Q', EXTRACT(QUARTER FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER,
-           '-', EXTRACT(YEAR FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER) AS periodo,
-    COUNT(*)                                                                     AS sesiones,
-    ROUND(SUM(a.distance) / 1000.0, 1)                                          AS km_totales,
-    fn_pace_text(AVG(a.average_speed))                                           AS ritmo_medio,
-    ROUND(AVG(a.average_heartrate), 1)                                           AS fc_media,
-    ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC * 1000, 3) AS eficiencia_x1000,
-    -- Deriva cardíaca media del período (de v_lap_degradation equivalente)
-    ROUND(AVG(a.suffer_score), 1)                                                AS suffer_medio
+           '-', EXTRACT(YEAR FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER) AS period,
+    COUNT(*)                                                                     AS sessions,
+    ROUND(SUM(a.distance) / 1000.0, 1)                                          AS total_km,
+    fn_pace_text(AVG(a.average_speed))                                           AS avg_pace,
+    ROUND(AVG(a.average_heartrate), 1)                                           AS avg_hr,
+    ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC * 1000, 3) AS aerobic_efficiency_x1000,
+    -- Average heart-rate drift (equivalent to v_lap_degradation).
+    ROUND(AVG(a.suffer_score), 1)                                                AS avg_suffer
 FROM activities a
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun')
   AND a.trainer = false
   AND a.average_heartrate IS NOT NULL
   AND a.average_speed IS NOT NULL
-GROUP BY anio, trimestre, periodo
-ORDER BY anio DESC, trimestre DESC;
+GROUP BY year, quarter, period
+ORDER BY year DESC, quarter DESC;
 
 
 -- ============================================================
--- [C] ANÁLISIS ROLLING — ÚLTIMOS N MESES
+-- [C] ROLLING ANALYSIS — LAST N MONTHS
 -- ============================================================
--- NOTA: Las siguientes vistas usan INTERVAL parametrizable.
---   Las vistas fijas miran los últimos 6 meses.
---   Para otros rangos, usar las queries parametrizadas al final del bloque.
+-- NOTE: The following views use a configurable INTERVAL.
+--   Fixed views cover the last six months.
+--   For other ranges, use the parameterized queries at the end of this file.
 -- ============================================================
 
 
 -- ------------------------------------------------------------
--- C1. Resumen rolling de los últimos 6 meses por mes
+-- C1. Six-month rolling summary by month
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Detecta tendencias de volumen y fatiga a medio plazo.
---   Un mes con alto km + bajo suffer → bien asimilado.
---   Un mes con poco km + alto suffer → sobreentrenamiento o carreras.
---   La columna sesiones_semana_avg indica adherencia al plan.
+-- INTERPRETATION:
+--   Detects medium-term volume and fatigue trends.
+--   A month with high distance and low suffer is well absorbed.
+--   A month with low distance and high suffer can indicate overtraining or races.
+--   avg_sessions_per_week indicates adherence to the plan.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_rolling_6months_by_month AS
 SELECT
-    TO_CHAR(DATE_TRUNC('month', a.start_date AT TIME ZONE 'Europe/Madrid'), 'YYYY-MM') AS mes,
-    TO_CHAR(a.start_date AT TIME ZONE 'Europe/Madrid', 'TMMonth YYYY')                 AS mes_label,
-    COUNT(*)                                                                             AS sesiones,
-    ROUND(SUM(a.distance) / 1000.0, 1)                                                  AS km_totales,
-    ROUND(SUM(a.moving_time) / 3600.0, 1)                                               AS horas_totales,
-    fn_pace_text(AVG(a.average_speed))                                                   AS ritmo_medio,
-    ROUND(AVG(a.average_heartrate), 1)                                                   AS fc_media,
-    SUM(a.total_elevation_gain)                                                          AS desnivel_total,
-    SUM(a.calories)                                                                      AS calorias_totales,
-    ROUND(AVG(a.suffer_score), 1)                                                        AS suffer_medio,
-    -- Ratio km-largo (>15km) sobre total: indica si el atleta hace tiradas largas
+    TO_CHAR(DATE_TRUNC('month', a.start_date AT TIME ZONE 'Europe/Madrid'), 'YYYY-MM') AS month,
+    TO_CHAR(a.start_date AT TIME ZONE 'Europe/Madrid', 'TMMonth YYYY')                 AS month_label,
+    COUNT(*)                                                                            AS sessions,
+    ROUND(SUM(a.distance) / 1000.0, 1)                                                 AS total_km,
+    ROUND(SUM(a.moving_time) / 3600.0, 1)                                              AS total_hours,
+    fn_pace_text(AVG(a.average_speed))                                                 AS avg_pace,
+    ROUND(AVG(a.average_heartrate), 1)                                                 AS avg_hr,
+    SUM(a.total_elevation_gain)                                                        AS total_elevation_gain,
+    SUM(a.calories)                                                                    AS total_calories,
+    ROUND(AVG(a.suffer_score), 1)                                                      AS avg_suffer,
+    -- Long-run ratio (>15 km) of the total.
     ROUND(
         COUNT(*) FILTER (WHERE a.distance > 15000)::DECIMAL / NULLIF(COUNT(*), 0) * 100, 1
-    )                                                                                    AS pct_sesiones_largas,
-    -- Sesiones de calidad (ritmo < 5:00/km estimado → speed > 3.33 m/s)
-    COUNT(*) FILTER (WHERE a.average_speed > 3.33)                                      AS sesiones_calidad,
-    ROUND(COUNT(*) / 4.33, 1)                                                            AS sesiones_semana_avg
+    )                                                                                   AS pct_long_sessions,
+    -- Quality sessions (estimated pace below 5:00/km → speed above 3.33 m/s).
+    COUNT(*) FILTER (WHERE a.average_speed > 3.33)                                     AS quality_sessions,
+    ROUND(COUNT(*) / 4.33, 1)                                                          AS avg_sessions_per_week
 FROM activities a
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
   AND a.trainer = false
   AND a.start_date >= NOW() - INTERVAL '6 months'
-GROUP BY mes, mes_label
-ORDER BY mes DESC;
+GROUP BY month, month_label
+ORDER BY month DESC;
 
 
 -- ------------------------------------------------------------
--- C2. Tendencia de forma: ritmo vs FC (eficiencia rolling)
+-- C2. Fitness trend: pace versus HR (rolling efficiency)
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Compara semana a semana el ritmo sostenido y la FC asociada.
---   Si el ritmo MEJORA (baja) y la FC se MANTIENE o BAJA → forma ascendente.
---   Si el ritmo EMPEORA (sube) y la FC SUBE → acumulación de fatiga.
---   Ideal ver esto como gráfico de línea en el frontend.
+-- INTERPRETATION:
+--   Compares sustained pace and associated HR week by week.
+--   Improving pace (lower) with stable or lower HR means rising fitness.
+--   Worse pace (higher) with higher HR means accumulated fatigue.
+--   Best displayed as a line chart in the frontend.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_rolling_weekly_fitness_trend AS
 SELECT
-    TO_CHAR(DATE_TRUNC('week', a.start_date AT TIME ZONE 'Europe/Madrid'), 'YYYY-"W"IW') AS semana,
-    DATE_TRUNC('week', a.start_date AT TIME ZONE 'Europe/Madrid')::DATE                   AS semana_inicio,
-    COUNT(*)                                                                                AS sesiones,
-    ROUND(SUM(a.distance) / 1000.0, 1)                                                     AS km_totales,
-    fn_pace_text(AVG(a.average_speed))                                                      AS ritmo_medio,
-    ROUND(AVG(a.average_heartrate), 1)                                                      AS fc_media,
-    -- Eficiencia normalizada x1000 para legibilidad
-    ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC * 1000, 3) AS eficiencia_x1000,
-    ROUND(SUM(a.moving_time) / 3600.0, 1)                                                   AS horas_totales,
-    ROUND(AVG(a.suffer_score), 1)                                                            AS suffer_medio,
-    -- Carga de entrenamiento arbitraria (TRIMP simplificado): duration_min * FC_media
-    ROUND(SUM(a.moving_time / 60.0 * COALESCE(a.average_heartrate, 0)), 0)                 AS trimp_estimado
+    TO_CHAR(DATE_TRUNC('week', a.start_date AT TIME ZONE 'Europe/Madrid'), 'YYYY-"W"IW') AS week,
+    DATE_TRUNC('week', a.start_date AT TIME ZONE 'Europe/Madrid')::DATE                   AS week_start,
+    COUNT(*)                                                                               AS sessions,
+    ROUND(SUM(a.distance) / 1000.0, 1)                                                    AS total_km,
+    fn_pace_text(AVG(a.average_speed))                                                     AS avg_pace,
+    ROUND(AVG(a.average_heartrate), 1)                                                     AS avg_hr,
+    -- Efficiency normalized by 1,000 for readability.
+    ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC * 1000, 3) AS efficiency_x1000,
+    ROUND(SUM(a.moving_time) / 3600.0, 1)                                                  AS total_hours,
+    ROUND(AVG(a.suffer_score), 1)                                                          AS avg_suffer,
+    -- Arbitrary training load (simplified TRIMP): duration_min * avg_hr.
+    ROUND(SUM(a.moving_time / 60.0 * COALESCE(a.average_heartrate, 0)), 0)                AS estimated_trimp
 FROM activities a
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun')
   AND a.trainer = false
   AND a.start_date >= NOW() - INTERVAL '6 months'
   AND a.average_heartrate IS NOT NULL
-GROUP BY semana, semana_inicio
-ORDER BY semana_inicio DESC;
+GROUP BY week, week_start
+ORDER BY week_start DESC;
 
 
 -- ------------------------------------------------------------
--- C3. Estado del material — desgaste de zapatillas
+-- C3. Equipment status — shoe wear
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   El km acumulado en cada zapatilla determina su vida útil.
---   Rango recomendado: 600-800 km para la mayoría de modelos.
---   Columna alerta_desgaste indica si se aproxima al límite.
---   Rotar entre 2-3 zapatillas reduce el riesgo de lesión.
+-- INTERPRETATION:
+--   Accumulated distance on each shoe determines its useful life.
+--   The recommended range is 600-800 km for most models.
+--   wear_alert indicates when a shoe is approaching the limit.
+--   Rotating between two or three shoes reduces injury risk.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_gear_wear_tracking AS
 SELECT
     g.strava_id                                  AS gear_id,
-    g.name                                       AS zapatilla,
-    g.brand_name                                 AS marca,
-    g.model_name                                 AS modelo,
-    g.primary_gear                               AS principal,
-    g.retired                                    AS retirada,
-    ROUND(g.distance / 1000.0, 0)               AS km_acumulados_total,
-    COUNT(a.id)                                  AS sesiones_recientes,
-    ROUND(SUM(a.distance) / 1000.0, 1)          AS km_ultimos_6m,
-    -- Porcentaje de vida útil consumida (base: 700km)
-    ROUND(g.distance / 7000.0 * 100, 1)         AS pct_vida_util_consumida,
+    g.name                                       AS shoe,
+    g.brand_name                                 AS brand,
+    g.model_name                                 AS model,
+    g.primary_gear                               AS primary_gear,
+    g.retired                                    AS retired,
+    ROUND(g.distance / 1000.0, 0)               AS total_accumulated_km,
+    COUNT(a.id)                                  AS recent_sessions,
+    ROUND(SUM(a.distance) / 1000.0, 1)          AS last_6_months_km,
+    -- Percentage of useful life consumed (based on 700 km).
+    ROUND(g.distance / 7000.0 * 100, 1)         AS pct_useful_life_consumed,
     CASE
-        WHEN g.retired = true           THEN '⚫ Retirada'
-        WHEN g.distance > 700000        THEN '🔴 Sustituir ya'
-        WHEN g.distance > 550000        THEN '🟠 Cerca del límite'
-        WHEN g.distance > 400000        THEN '🟡 Vigilar'
+        WHEN g.retired = true           THEN '⚫ Retired'
+        WHEN g.distance > 700000        THEN '🔴 Replace now'
+        WHEN g.distance > 550000        THEN '🟠 Near the limit'
+        WHEN g.distance > 400000        THEN '🟡 Monitor'
         ELSE                                 '🟢 OK'
-    END                                          AS alerta_desgaste
+    END                                          AS wear_alert
 FROM gears g
 LEFT JOIN activities a ON a.gear_id = g.strava_id
     AND a.start_date >= NOW() - INTERVAL '6 months'
@@ -368,34 +365,34 @@ ORDER BY g.primary_gear DESC, g.distance DESC;
 
 
 -- ============================================================
--- [D] ANÁLISIS DEL MES ACTUAL
+-- [D] CURRENT MONTH ANALYSIS
 -- ============================================================
 
 
 -- ------------------------------------------------------------
--- D1. Resumen KPIs del mes en curso
+-- D1. Current-month KPI summary
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Snapshot del estado del mes actual.
---   Comparar con el promedio histórico mensual de los últimos 12 meses
---   para saber si el mes está por encima o por debajo de la media.
---   Las columnas *_vs_avg muestran el % de desviación.
+-- INTERPRETATION:
+--   Snapshot of the current month.
+--   Compare it with the historical monthly average of the previous 12 months
+--   to determine whether it is above or below average.
+--   The *_vs_avg columns show the percentage deviation.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_current_month_summary AS
 WITH current_month AS (
     SELECT
-        COUNT(*)                                                    AS sesiones,
-        ROUND(SUM(a.distance) / 1000.0, 1)                         AS km_totales,
-        ROUND(SUM(a.moving_time) / 3600.0, 1)                      AS horas_totales,
+        COUNT(*)                                                    AS sessions,
+        ROUND(SUM(a.distance) / 1000.0, 1)                         AS total_km,
+        ROUND(SUM(a.moving_time) / 3600.0, 1)                      AS total_hours,
         AVG(a.average_speed)                                        AS avg_speed,
-        ROUND(AVG(a.average_heartrate), 1)                          AS fc_media,
-        SUM(a.total_elevation_gain)                                 AS desnivel_total,
-        SUM(a.calories)                                             AS calorias_totales,
-        ROUND(AVG(a.suffer_score), 1)                               AS suffer_medio,
-        COUNT(*) FILTER (WHERE a.distance > 15000)                  AS sesiones_largas,
-        COUNT(*) FILTER (WHERE a.average_speed > 3.33)              AS sesiones_calidad,
-        -- Días con actividad en el mes
-        COUNT(DISTINCT DATE(a.start_date AT TIME ZONE 'Europe/Madrid')) AS dias_con_actividad
+        ROUND(AVG(a.average_heartrate), 1)                          AS avg_hr,
+        SUM(a.total_elevation_gain)                                 AS total_elevation_gain,
+        SUM(a.calories)                                             AS total_calories,
+        ROUND(AVG(a.suffer_score), 1)                               AS avg_suffer,
+        COUNT(*) FILTER (WHERE a.distance > 15000)                  AS long_sessions,
+        COUNT(*) FILTER (WHERE a.average_speed > 3.33)              AS quality_sessions,
+        -- Days with activity in the month.
+        COUNT(DISTINCT DATE(a.start_date AT TIME ZONE 'Europe/Madrid')) AS active_days
     FROM activities a
     WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
       AND a.trainer = false
@@ -403,132 +400,130 @@ WITH current_month AS (
 ),
 avg_last_12 AS (
     SELECT
-        ROUND(AVG(mes_km), 1)       AS avg_km,
-        ROUND(AVG(mes_sesiones), 1) AS avg_sesiones,
-        ROUND(AVG(mes_horas), 1)    AS avg_horas
+        ROUND(AVG(month_km), 1)       AS avg_km,
+        ROUND(AVG(month_sessions), 1) AS avg_sessions,
+        ROUND(AVG(month_hours), 1)    AS avg_hours
     FROM (
         SELECT
-            DATE_TRUNC('month', a.start_date) AS mes,
-            COUNT(*)                           AS mes_sesiones,
-            SUM(a.distance) / 1000.0           AS mes_km,
-            SUM(a.moving_time) / 3600.0        AS mes_horas
+            DATE_TRUNC('month', a.start_date) AS month,
+            COUNT(*)                          AS month_sessions,
+            SUM(a.distance) / 1000.0          AS month_km,
+            SUM(a.moving_time) / 3600.0       AS month_hours
         FROM activities a
         WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
           AND a.trainer = false
           AND a.start_date >= NOW() - INTERVAL '12 months'
           AND a.start_date < DATE_TRUNC('month', NOW())
-        GROUP BY mes
+        GROUP BY month
     ) sub
 )
 SELECT
-    TO_CHAR(NOW() AT TIME ZONE 'Europe/Madrid', 'TMMonth YYYY') AS mes_actual,
-    cm.sesiones,
-    cm.km_totales,
-    cm.horas_totales,
-    fn_pace_text(cm.avg_speed)                                   AS ritmo_medio,
-    cm.fc_media,
-    cm.desnivel_total,
-    cm.calorias_totales,
-    cm.suffer_medio,
-    cm.sesiones_largas,
-    cm.sesiones_calidad,
-    cm.dias_con_actividad,
-    -- Comparativa vs promedio 12 meses anteriores
-    al.avg_km                                                    AS avg_km_12m,
-    al.avg_sesiones                                              AS avg_sesiones_12m,
-    ROUND((cm.km_totales - al.avg_km) / NULLIF(al.avg_km, 0) * 100, 1) AS km_vs_avg_pct,
-    ROUND((cm.sesiones - al.avg_sesiones) / NULLIF(al.avg_sesiones, 0) * 100, 1) AS sesiones_vs_avg_pct
+    TO_CHAR(NOW() AT TIME ZONE 'Europe/Madrid', 'TMMonth YYYY') AS current_month,
+    cm.sessions,
+    cm.total_km,
+    cm.total_hours,
+    fn_pace_text(cm.avg_speed)                                   AS avg_pace,
+    cm.avg_hr,
+    cm.total_elevation_gain,
+    cm.total_calories,
+    cm.avg_suffer,
+    cm.long_sessions,
+    cm.quality_sessions,
+    cm.active_days,
+    -- Comparison with the previous 12-month average.
+    al.avg_km                                                     AS avg_km_12m,
+    al.avg_sessions                                               AS avg_sessions_12m,
+    ROUND((cm.total_km - al.avg_km) / NULLIF(al.avg_km, 0) * 100, 1) AS km_vs_avg_pct,
+    ROUND((cm.sessions - al.avg_sessions) / NULLIF(al.avg_sessions, 0) * 100, 1) AS sessions_vs_avg_pct
 FROM current_month cm, avg_last_12 al;
 
 
 -- ------------------------------------------------------------
--- D2. Comparativa mes actual vs mes anterior (día a día)
+-- D2. Current month versus previous month comparison (day by day)
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Permite ver si el atleta va a un ritmo mayor o menor que el mes pasado
---   en el mismo punto del mes. Útil para saber si el mes actual va bien.
---   Comparar km_acumulados_actual vs km_acumulados_anterior en el mismo día.
+-- INTERPRETATION:
+--   Shows whether the athlete is ahead of or behind last month at the same
+--   point in the month. Compare current_cumulative_km and previous_cumulative_km.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_current_vs_last_month_daily AS
 WITH current_m AS (
     SELECT
-        EXTRACT(DAY FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER AS dia,
-        COUNT(*)                                   AS sesiones,
-        ROUND(SUM(a.distance) / 1000.0, 2)        AS km_dia
+        EXTRACT(DAY FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER AS day,
+        COUNT(*)                                   AS sessions,
+        ROUND(SUM(a.distance) / 1000.0, 2)        AS day_km
     FROM activities a
     WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
       AND a.trainer = false
       AND a.start_date >= DATE_TRUNC('month', NOW())
-    GROUP BY dia
+    GROUP BY day
 ),
 prev_m AS (
     SELECT
-        EXTRACT(DAY FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER AS dia,
-        COUNT(*)                                   AS sesiones,
-        ROUND(SUM(a.distance) / 1000.0, 2)        AS km_dia
+        EXTRACT(DAY FROM a.start_date AT TIME ZONE 'Europe/Madrid')::INTEGER AS day,
+        COUNT(*)                                   AS sessions,
+        ROUND(SUM(a.distance) / 1000.0, 2)        AS day_km
     FROM activities a
     WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
       AND a.trainer = false
       AND a.start_date >= DATE_TRUNC('month', NOW()) - INTERVAL '1 month'
       AND a.start_date  < DATE_TRUNC('month', NOW())
-    GROUP BY dia
+    GROUP BY day
 ),
-dias AS (SELECT generate_series(1, 31) AS dia)
+days AS (SELECT generate_series(1, 31) AS day)
 SELECT
-    d.dia,
-    COALESCE(cm.sesiones, 0)  AS sesiones_mes_actual,
-    COALESCE(cm.km_dia, 0)    AS km_mes_actual,
-    COALESCE(pm.sesiones, 0)  AS sesiones_mes_anterior,
-    COALESCE(pm.km_dia, 0)    AS km_mes_anterior,
-    -- Acumulados progresivos
-    SUM(COALESCE(cm.km_dia, 0)) OVER (ORDER BY d.dia)  AS km_acum_actual,
-    SUM(COALESCE(pm.km_dia, 0)) OVER (ORDER BY d.dia)  AS km_acum_anterior
-FROM dias d
-LEFT JOIN current_m cm ON cm.dia = d.dia
-LEFT JOIN prev_m    pm ON pm.dia  = d.dia
-ORDER BY d.dia;
+    d.day,
+    COALESCE(cm.sessions, 0)  AS current_month_sessions,
+    COALESCE(cm.day_km, 0)    AS current_month_km,
+    COALESCE(pm.sessions, 0)  AS previous_month_sessions,
+    COALESCE(pm.day_km, 0)    AS previous_month_km,
+    -- Running totals.
+    SUM(COALESCE(cm.day_km, 0)) OVER (ORDER BY d.day)  AS current_cumulative_km,
+    SUM(COALESCE(pm.day_km, 0)) OVER (ORDER BY d.day)  AS previous_cumulative_km
+FROM days d
+LEFT JOIN current_m cm ON cm.day = d.day
+LEFT JOIN prev_m    pm ON pm.day  = d.day
+ORDER BY d.day;
 
 
 -- ------------------------------------------------------------
--- D3. Sesiones del mes actual — detalle individual
+-- D3. Current-month sessions — individual detail
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Listado completo de cada sesión del mes con todos los KPIs.
---   Permite identificar las sesiones de mayor calidad, ver si hay
---   progresión en ritmo y detectar sesiones con FC anómala.
---   suffer_score > 100 = sesión muy exigente; conviene no acumular muchas seguidas.
+-- INTERPRETATION:
+--   Complete list of the month's sessions with all KPIs.
+--   Identifies high-quality sessions, pace progression, and anomalous HR.
+--   suffer_score > 100 means a highly demanding session; avoid stacking many.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_current_month_sessions AS
 SELECT
     a.strava_id,
-    a.name                                                          AS actividad,
-    a.start_date AT TIME ZONE 'Europe/Madrid'                       AS fecha,
-    TO_CHAR(a.start_date AT TIME ZONE 'Europe/Madrid', 'Day')       AS dia_semana,
+    a.name                                                          AS activity,
+    a.start_date AT TIME ZONE 'Europe/Madrid'                       AS date,
+    TO_CHAR(a.start_date AT TIME ZONE 'Europe/Madrid', 'Day')       AS day_of_week,
     a.sport_type,
     ROUND(a.distance / 1000.0, 2)                                   AS km,
-    fn_duration_text(a.moving_time)                                 AS tiempo_movimiento,
-    fn_pace_text(a.average_speed)                                   AS ritmo_medio,
-    fn_pace_text(a.max_speed)                                       AS ritmo_max,
-    a.average_heartrate                                             AS fc_media,
-    a.max_heartrate                                                 AS fc_max,
-    a.total_elevation_gain                                          AS desnivel,
+    fn_duration_text(a.moving_time)                                 AS moving_time,
+    fn_pace_text(a.average_speed)                                   AS avg_pace,
+    fn_pace_text(a.max_speed)                                       AS max_pace,
+    a.average_heartrate                                             AS avg_hr,
+    a.max_heartrate                                                 AS max_hr,
+    a.total_elevation_gain                                          AS elevation_gain,
     a.calories,
     a.suffer_score,
-    a.perceived_exertion                                            AS esfuerzo_percibido,
-    a.device_name                                                   AS dispositivo,
-    g.name                                                          AS zapatilla,
-    -- Clasificación de intensidad por suffer_score
+    a.perceived_exertion                                            AS perceived_exertion,
+    a.device_name                                                   AS device,
+    g.name                                                          AS shoe,
+    -- Intensity classification by suffer_score.
     CASE
-        WHEN a.suffer_score < 25  THEN 'Regenerativo'
-        WHEN a.suffer_score < 50  THEN 'Suave'
-        WHEN a.suffer_score < 100 THEN 'Moderado'
-        WHEN a.suffer_score < 150 THEN 'Duro'
-        ELSE                           'Muy duro'
-    END                                                             AS intensidad_estimada,
-    -- ¿Es tirada larga? (>15km)
-    CASE WHEN a.distance > 15000 THEN 'Sí' ELSE 'No' END           AS tirada_larga,
-    -- Número de laps registrados
-    (SELECT COUNT(*) FROM activity_laps l WHERE l.activity_strava_id = a.strava_id) AS num_laps
+        WHEN a.suffer_score < 25  THEN 'Recovery'
+        WHEN a.suffer_score < 50  THEN 'Easy'
+        WHEN a.suffer_score < 100 THEN 'Moderate'
+        WHEN a.suffer_score < 150 THEN 'Hard'
+        ELSE                           'Very hard'
+    END                                                             AS estimated_intensity,
+    -- Is this a long run? (>15 km)
+    CASE WHEN a.distance > 15000 THEN 'Yes' ELSE 'No' END          AS is_long_run,
+    -- Number of recorded laps.
+    (SELECT COUNT(*) FROM activity_laps l WHERE l.activity_strava_id = a.strava_id) AS lap_count
 FROM activities a
 LEFT JOIN gears g ON g.strava_id = a.gear_id
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
@@ -538,33 +533,32 @@ ORDER BY a.start_date DESC;
 
 
 -- ============================================================
--- [E] ANÁLISIS SEMANA ANTERIOR — DETALLE COMPLETO
+-- [E] PREVIOUS WEEK ANALYSIS — COMPLETE DETAIL
 -- ============================================================
 
 
 -- ------------------------------------------------------------
--- E1. Resumen semana anterior con comparativa vs 4 semanas previas
+-- E1. Previous-week summary compared with the prior four weeks
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   La semana anterior es la más reciente con datos completos.
---   Comparar con la media de las 4 semanas anteriores revela si fue
---   una semana de carga, descarga o dentro de la normalidad.
---   Una semana de carga típica tiene un 20-30% más de km que la media.
---   Una semana de descarga (tapering) debería rondar el 50-60% del volumen normal.
+-- INTERPRETATION:
+--   The previous week is the most recent with complete data.
+--   Comparing its average with the prior four weeks identifies a loading,
+--   recovery, or normal week. A typical loading week has 20–30% more distance.
+--   A recovery week (tapering) should be around 50–60% of normal volume.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_last_week_summary AS
 WITH last_week_data AS (
     SELECT
-        COUNT(*)                                                     AS sesiones,
-        ROUND(SUM(a.distance) / 1000.0, 1)                          AS km_totales,
-        ROUND(SUM(a.moving_time) / 3600.0, 2)                       AS horas_totales,
+        COUNT(*)                                                     AS sessions,
+        ROUND(SUM(a.distance) / 1000.0, 1)                          AS total_km,
+        ROUND(SUM(a.moving_time) / 3600.0, 2)                       AS total_hours,
         AVG(a.average_speed)                                         AS avg_speed,
-        ROUND(AVG(a.average_heartrate), 1)                           AS fc_media,
-        SUM(a.total_elevation_gain)                                  AS desnivel_total,
-        SUM(a.calories)                                              AS calorias_totales,
-        ROUND(AVG(a.suffer_score), 1)                                AS suffer_medio,
-        COUNT(*) FILTER (WHERE a.distance > 15000)                   AS sesiones_largas,
-        ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC * 1000, 3) AS eficiencia
+        ROUND(AVG(a.average_heartrate), 1)                           AS avg_hr,
+        SUM(a.total_elevation_gain)                                  AS total_elevation_gain,
+        SUM(a.calories)                                              AS total_calories,
+        ROUND(AVG(a.suffer_score), 1)                                AS avg_suffer,
+        COUNT(*) FILTER (WHERE a.distance > 15000)                   AS long_sessions,
+        ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC * 1000, 3) AS efficiency
     FROM activities a
     WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
       AND a.trainer = false
@@ -574,12 +568,12 @@ WITH last_week_data AS (
 prev_4w_avg AS (
     SELECT
         ROUND(AVG(w_km), 1)      AS avg_km,
-        ROUND(AVG(w_sesiones), 1) AS avg_sesiones,
+        ROUND(AVG(w_sessions), 1) AS avg_sessions,
         ROUND(AVG(w_suffer), 1)  AS avg_suffer
     FROM (
         SELECT
-            DATE_TRUNC('week', a.start_date) AS semana,
-            COUNT(*)                          AS w_sesiones,
+            DATE_TRUNC('week', a.start_date) AS week,
+            COUNT(*)                          AS w_sessions,
             SUM(a.distance) / 1000.0          AS w_km,
             AVG(a.suffer_score)               AS w_suffer
         FROM activities a
@@ -587,68 +581,68 @@ prev_4w_avg AS (
           AND a.trainer = false
           AND a.start_date >= DATE_TRUNC('week', NOW()) - INTERVAL '5 weeks'
           AND a.start_date  < DATE_TRUNC('week', NOW()) - INTERVAL '1 week'
-        GROUP BY semana
+        GROUP BY week
     ) sub
 )
 SELECT
-    TO_CHAR(DATE_TRUNC('week', NOW()) - INTERVAL '1 week', 'DD/MM/YYYY') AS semana_inicio,
-    TO_CHAR(DATE_TRUNC('week', NOW()) - INTERVAL '1 day',  'DD/MM/YYYY') AS semana_fin,
-    lw.sesiones,
-    lw.km_totales,
-    lw.horas_totales,
-    fn_pace_text(lw.avg_speed)                                            AS ritmo_medio,
-    lw.fc_media,
-    lw.desnivel_total,
-    lw.calorias_totales,
-    lw.suffer_medio,
-    lw.sesiones_largas,
-    lw.eficiencia                                                         AS eficiencia_x1000,
-    -- Comparativa vs media 4 semanas anteriores
-    p4.avg_km                                                             AS avg_km_4sem,
-    p4.avg_sesiones                                                       AS avg_sesiones_4sem,
-    p4.avg_suffer                                                         AS avg_suffer_4sem,
-    ROUND((lw.km_totales - p4.avg_km) / NULLIF(p4.avg_km, 0) * 100, 1) AS km_vs_media_4s_pct,
-    -- Tipo de semana inferido
+    TO_CHAR(DATE_TRUNC('week', NOW()) - INTERVAL '1 week', 'DD/MM/YYYY') AS week_start,
+    TO_CHAR(DATE_TRUNC('week', NOW()) - INTERVAL '1 day',  'DD/MM/YYYY') AS week_end,
+    lw.sessions,
+    lw.total_km,
+    lw.total_hours,
+    fn_pace_text(lw.avg_speed)                                            AS avg_pace,
+    lw.avg_hr,
+    lw.total_elevation_gain,
+    lw.total_calories,
+    lw.avg_suffer,
+    lw.long_sessions,
+    lw.efficiency                                                         AS efficiency_x1000,
+    -- Comparison with the prior four-week average.
+    p4.avg_km                                                             AS avg_km_4_weeks,
+    p4.avg_sessions                                                       AS avg_sessions_4_weeks,
+    p4.avg_suffer                                                         AS avg_suffer_4_weeks,
+    ROUND((lw.total_km - p4.avg_km) / NULLIF(p4.avg_km, 0) * 100, 1) AS km_vs_4_week_avg_pct,
+    -- Inferred week type.
     CASE
-        WHEN (lw.km_totales - p4.avg_km) / NULLIF(p4.avg_km, 0) > 0.20  THEN '⬆ Semana de carga'
-        WHEN (lw.km_totales - p4.avg_km) / NULLIF(p4.avg_km, 0) < -0.30 THEN '⬇ Semana de descarga / taper'
-        ELSE '↔ Semana estándar'
-    END                                                                   AS tipo_semana
+        WHEN (lw.total_km - p4.avg_km) / NULLIF(p4.avg_km, 0) > 0.20  THEN '⬆ Loading week'
+        WHEN (lw.total_km - p4.avg_km) / NULLIF(p4.avg_km, 0) < -0.30 THEN '⬇ Recovery week / taper'
+        ELSE '↔ Standard week'
+    END                                                                   AS week_type
 FROM last_week_data lw, prev_4w_avg p4;
 
 
 -- ------------------------------------------------------------
--- E2. Detalle de sesiones de la semana anterior
+-- E2. Previous-week session details
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Igual que v_current_month_sessions pero circunscrito a la semana anterior.
---   Permite revisar sesión por sesión la calidad del trabajo realizado.
+-- INTERPRETATION:
+--   Equivalent to v_current_month_sessions, limited to the previous week.
+--   Allows reviewing the quality of completed work session by session.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_last_week_sessions AS
 SELECT
     a.strava_id,
-    a.name                                                          AS actividad,
-    a.start_date AT TIME ZONE 'Europe/Madrid'                       AS fecha,
-    TO_CHAR(a.start_date AT TIME ZONE 'Europe/Madrid', 'TMDay')     AS dia_semana,
+    a.name                                                          AS activity,
+    a.start_date AT TIME ZONE 'Europe/Madrid'                       AS date,
+    TO_CHAR(a.start_date AT TIME ZONE 'Europe/Madrid', 'TMDay')     AS day_of_week,
     ROUND(a.distance / 1000.0, 2)                                   AS km,
-    fn_duration_text(a.moving_time)                                 AS tiempo_movimiento,
-    fn_pace_text(a.average_speed)                                   AS ritmo_medio,
-    fn_pace_text(a.max_speed)                                       AS ritmo_max,
-    a.average_heartrate                                             AS fc_media,
-    a.max_heartrate                                                 AS fc_max,
-    a.total_elevation_gain                                          AS desnivel,
+    fn_duration_text(a.moving_time)                                 AS moving_time,
+    fn_pace_text(a.average_speed)                                   AS avg_pace,
+    fn_pace_text(a.max_speed)                                       AS max_pace,
+    a.average_heartrate                                             AS avg_hr,
+    a.max_heartrate                                                 AS max_hr,
+    a.total_elevation_gain                                          AS elevation_gain,
     a.calories,
     a.suffer_score,
-    a.perceived_exertion                                            AS esfuerzo_percibido,
-    g.name                                                          AS zapatilla,
+    a.perceived_exertion                                            AS perceived_exertion,
+    g.name                                                          AS shoe,
     CASE
-        WHEN a.suffer_score < 25  THEN 'Regenerativo'
-        WHEN a.suffer_score < 50  THEN 'Suave'
-        WHEN a.suffer_score < 100 THEN 'Moderado'
-        WHEN a.suffer_score < 150 THEN 'Duro'
-        ELSE                           'Muy duro'
-    END                                                             AS intensidad_estimada,
-    (SELECT COUNT(*) FROM activity_laps l WHERE l.activity_strava_id = a.strava_id) AS num_laps
+        WHEN a.suffer_score < 25  THEN 'Recovery'
+        WHEN a.suffer_score < 50  THEN 'Easy'
+        WHEN a.suffer_score < 100 THEN 'Moderate'
+        WHEN a.suffer_score < 150 THEN 'Hard'
+        ELSE                           'Very hard'
+    END                                                             AS estimated_intensity,
+    (SELECT COUNT(*) FROM activity_laps l WHERE l.activity_strava_id = a.strava_id) AS lap_count
 FROM activities a
 LEFT JOIN gears g ON g.strava_id = a.gear_id
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
@@ -659,45 +653,44 @@ ORDER BY a.start_date ASC;
 
 
 -- ------------------------------------------------------------
--- E3. Laps de las sesiones de la semana anterior (detalle por lap)
+-- E3. Previous-week session laps (lap-level detail)
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   El análisis por lap es la vista más granular.
---   Permite ver si el atleta mantiene o pierde el ritmo a lo largo
---   de la sesión. Un ritmo estable o negativo (acelerando al final)
---   es señal de buena gestión del esfuerzo.
---   La columna delta_ritmo_vs_primer_lap mide la degradación acumulada.
+-- INTERPRETATION:
+--   Lap analysis is the most granular view.
+--   It shows whether the athlete holds or loses pace during the session. Stable
+--   or negative pace (accelerating at the end) indicates good effort management.
+--   speed_delta_vs_first_lap_pct measures accumulated degradation.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_last_week_lap_detail AS
-WITH primer_lap_speed AS (
+WITH first_lap_speed AS (
     SELECT
         activity_strava_id,
-        average_speed AS velocidad_primer_lap
+        average_speed AS first_lap_speed
     FROM activity_laps
     WHERE lap_index = 0
 )
 SELECT
     a.strava_id     AS activity_id,
-    a.name          AS actividad,
-    a.start_date AT TIME ZONE 'Europe/Madrid'   AS fecha_actividad,
+    a.name          AS activity,
+    a.start_date AT TIME ZONE 'Europe/Madrid'   AS activity_date,
     l.lap_index + 1                             AS lap,
-    l.name                                      AS nombre_lap,
+    l.name                                      AS lap_name,
     ROUND(l.distance / 1000.0, 3)              AS km,
-    fn_duration_text(l.moving_time)             AS tiempo,
-    fn_pace_text(l.average_speed)               AS ritmo,
-    l.average_heartrate                         AS fc_media,
-    l.max_heartrate                             AS fc_max,
-    l.total_elevation_gain                      AS desnivel,
-    l.pace_zone                                 AS zona_ritmo,
-    -- Delta ritmo vs primer lap: + significa más lento, - más rápido
+    fn_duration_text(l.moving_time)             AS time,
+    fn_pace_text(l.average_speed)               AS pace,
+    l.average_heartrate                         AS avg_hr,
+    l.max_heartrate                             AS max_hr,
+    l.total_elevation_gain                      AS elevation_gain,
+    l.pace_zone,
+    -- Speed delta versus the first lap: + means slower, - means faster.
     ROUND(
-        (NULLIF(p.velocidad_primer_lap, 0) - l.average_speed)
-        / NULLIF(p.velocidad_primer_lap, 0) * 100
-    , 1)                                        AS delta_velocidad_vs_primer_lap_pct,
-    fn_pace_text(p.velocidad_primer_lap)        AS ritmo_primer_lap_ref
+        (NULLIF(p.first_lap_speed, 0) - l.average_speed)
+        / NULLIF(p.first_lap_speed, 0) * 100
+    , 1)                                        AS speed_delta_vs_first_lap_pct,
+    fn_pace_text(p.first_lap_speed)             AS first_lap_pace_ref
 FROM activity_laps l
 JOIN activities a       ON a.strava_id = l.activity_strava_id
-JOIN primer_lap_speed p ON p.activity_strava_id = l.activity_strava_id
+JOIN first_lap_speed p ON p.activity_strava_id = l.activity_strava_id
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun')
   AND a.trainer = false
   AND a.start_date >= DATE_TRUNC('week', NOW()) - INTERVAL '1 week'
@@ -706,63 +699,61 @@ ORDER BY a.start_date ASC, l.lap_index ASC;
 
 
 -- ------------------------------------------------------------
--- E4. Degradación de ritmo y deriva cardíaca por sesión (semana anterior)
+-- E4. Pace degradation and heart-rate drift by session (previous week)
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Versión extendida de v_lap_degradation ya existente.
---   variacion_velocidad_pct > 0 → el atleta terminó más rápido (negativo split = ideal).
---   variacion_velocidad_pct < 0 → el atleta se frenó (positive split = fatiga).
---   deriva_cardiaca > 10 lpm con distancias medias → señal de fatiga cardiovascular.
---   La eficiencia_cardiaca = variación de velocidad / variación de FC: si sube
---   velocidad más que FC → buena respuesta. Si sube más FC → sobrecoste cardíaco.
+-- INTERPRETATION:
+--   Extended version of the existing v_lap_degradation.
+--   speed_change_pct > 0 means the athlete finished faster (a negative split).
+--   speed_change_pct < 0 means the athlete slowed down (a positive split).
+--   heart_rate_drift > 10 bpm at medium distances may indicate cardiovascular fatigue.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_last_week_degradation AS
-WITH primer_lap AS (
+WITH first_lap AS (
     SELECT DISTINCT ON (activity_strava_id)
         activity_strava_id,
-        average_speed      AS vel_inicio,
-        average_heartrate  AS fc_inicio
+        average_speed      AS start_speed,
+        average_heartrate  AS start_hr
     FROM activity_laps
     ORDER BY activity_strava_id, lap_index ASC
 ),
-ultimo_lap AS (
+last_lap AS (
     SELECT DISTINCT ON (activity_strava_id)
         activity_strava_id,
-        average_speed      AS vel_fin,
-        average_heartrate  AS fc_fin
+        average_speed      AS end_speed,
+        average_heartrate  AS end_hr
     FROM activity_laps
     ORDER BY activity_strava_id, lap_index DESC
 )
 SELECT
     a.strava_id,
-    a.name                                          AS actividad,
-    a.start_date AT TIME ZONE 'Europe/Madrid'        AS fecha,
+    a.name                                          AS activity,
+    a.start_date AT TIME ZONE 'Europe/Madrid'        AS date,
     ROUND(a.distance / 1000.0, 2)                   AS km_total,
-    fn_pace_text(p.vel_inicio)                       AS ritmo_inicio,
-    fn_pace_text(u.vel_fin)                          AS ritmo_fin,
-    ROUND(((u.vel_fin - p.vel_inicio) / NULLIF(p.vel_inicio, 0) * 100)::NUMERIC, 1) AS variacion_velocidad_pct,
-    ROUND(p.fc_inicio::NUMERIC, 1)                  AS fc_inicio,
-    ROUND(u.fc_fin::NUMERIC, 1)                     AS fc_fin,
-    ROUND((u.fc_fin - p.fc_inicio)::NUMERIC, 1)     AS deriva_cardiaca,
-    -- Calidad de gestión del ritmo
+    fn_pace_text(p.start_speed)                      AS start_pace,
+    fn_pace_text(u.end_speed)                        AS end_pace,
+    ROUND(((u.end_speed - p.start_speed) / NULLIF(p.start_speed, 0) * 100)::NUMERIC, 1) AS speed_change_pct,
+    ROUND(p.start_hr::NUMERIC, 1)                    AS start_hr,
+    ROUND(u.end_hr::NUMERIC, 1)                      AS end_hr,
+    ROUND((u.end_hr - p.start_hr)::NUMERIC, 1)       AS heart_rate_drift,
+    -- Pace-management quality.
     CASE
-        WHEN ((u.vel_fin - p.vel_inicio) / NULLIF(p.vel_inicio, 0) * 100) > 2
-             THEN '✅ Negativo split (aceleró)'
-        WHEN ((u.vel_fin - p.vel_inicio) / NULLIF(p.vel_inicio, 0) * 100) BETWEEN -2 AND 2
-             THEN '↔ Ritmo constante'
-        WHEN ((u.vel_fin - p.vel_inicio) / NULLIF(p.vel_inicio, 0) * 100) BETWEEN -10 AND -2
-             THEN '⚠ Ligera degradación'
-        ELSE '🔴 Degradación severa'
-    END                                             AS gestion_ritmo,
-    -- Alerta deriva cardíaca
+        WHEN ((u.end_speed - p.start_speed) / NULLIF(p.start_speed, 0) * 100) > 2
+             THEN '✅ Negative split (accelerated)'
+        WHEN ((u.end_speed - p.start_speed) / NULLIF(p.start_speed, 0) * 100) BETWEEN -2 AND 2
+             THEN '↔ Constant pace'
+        WHEN ((u.end_speed - p.start_speed) / NULLIF(p.start_speed, 0) * 100) BETWEEN -10 AND -2
+             THEN '⚠ Slight degradation'
+        ELSE '🔴 Severe degradation'
+    END                                             AS pace_management,
+    -- Heart-rate drift alert.
     CASE
-        WHEN (u.fc_fin - p.fc_inicio) < 5   THEN '✅ FC estable'
-        WHEN (u.fc_fin - p.fc_inicio) < 10  THEN '🟡 Deriva moderada'
-        ELSE                                      '🔴 Alta deriva cardíaca'
-    END                                             AS alerta_fc
+        WHEN (u.end_hr - p.start_hr) < 5   THEN '✅ Stable HR'
+        WHEN (u.end_hr - p.start_hr) < 10  THEN '🟡 Moderate drift'
+        ELSE                                     '🔴 High heart-rate drift'
+    END                                             AS heart_rate_alert
 FROM activities a
-JOIN primer_lap p ON p.activity_strava_id = a.strava_id
-JOIN ultimo_lap u ON u.activity_strava_id = a.strava_id
+JOIN first_lap p ON p.activity_strava_id = a.strava_id
+JOIN last_lap u ON u.activity_strava_id = a.strava_id
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun')
   AND a.trainer = false
   AND a.start_date >= DATE_TRUNC('week', NOW()) - INTERVAL '1 week'
@@ -771,32 +762,31 @@ ORDER BY a.start_date DESC;
 
 
 -- ============================================================
--- [F] ANÁLISIS SEMANA ACTUAL — TIEMPO REAL
+-- [F] CURRENT WEEK ANALYSIS — REAL TIME
 -- ============================================================
 
 
 -- ------------------------------------------------------------
--- F1. Resumen en tiempo real de la semana actual
+-- F1. Real-time current-week summary
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Cuadro de mando de la semana en curso.
---   km_restantes_objetivo estima los km que faltan para alcanzar
---   la media de las últimas 4 semanas (útil para planificación).
---   dias_restantes indica cuántos días quedan para completar la semana.
+-- INTERPRETATION:
+--   Dashboard for the current week.
+--   km_remaining_to_target estimates distance needed to reach the average of
+--   the last four weeks. days_remaining indicates the time left in the week.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_current_week_summary AS
 WITH this_week AS (
     SELECT
-        COUNT(*)                                                     AS sesiones,
-        ROUND(SUM(a.distance) / 1000.0, 1)                          AS km_totales,
-        ROUND(SUM(a.moving_time) / 3600.0, 2)                       AS horas_totales,
+        COUNT(*)                                                     AS sessions,
+        ROUND(SUM(a.distance) / 1000.0, 1)                          AS total_km,
+        ROUND(SUM(a.moving_time) / 3600.0, 2)                       AS total_hours,
         AVG(a.average_speed)                                         AS avg_speed,
-        ROUND(AVG(a.average_heartrate), 1)                           AS fc_media,
-        SUM(a.total_elevation_gain)                                  AS desnivel_total,
-        SUM(a.calories)                                              AS calorias_totales,
-        ROUND(AVG(a.suffer_score), 1)                                AS suffer_medio,
-        -- TRIMP estimado: carga total de la semana
-        ROUND(SUM(a.moving_time / 60.0 * COALESCE(a.average_heartrate, 0)), 0) AS trimp_semana
+        ROUND(AVG(a.average_heartrate), 1)                           AS avg_hr,
+        SUM(a.total_elevation_gain)                                  AS total_elevation_gain,
+        SUM(a.calories)                                              AS total_calories,
+        ROUND(AVG(a.suffer_score), 1)                                AS avg_suffer,
+        -- Estimated TRIMP: total weekly load.
+        ROUND(SUM(a.moving_time / 60.0 * COALESCE(a.average_heartrate, 0)), 0) AS weekly_trimp
     FROM activities a
     WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
       AND a.trainer = false
@@ -805,136 +795,135 @@ WITH this_week AS (
 avg_4w AS (
     SELECT ROUND(AVG(w_km), 1) AS avg_km
     FROM (
-        SELECT DATE_TRUNC('week', a.start_date) AS sem, SUM(a.distance) / 1000.0 AS w_km
+        SELECT DATE_TRUNC('week', a.start_date) AS week, SUM(a.distance) / 1000.0 AS w_km
         FROM activities a
         WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
           AND a.trainer = false
           AND a.start_date >= DATE_TRUNC('week', NOW()) - INTERVAL '4 weeks'
           AND a.start_date  < DATE_TRUNC('week', NOW())
-        GROUP BY sem
+        GROUP BY week
     ) sub
 )
 SELECT
-    TO_CHAR(DATE_TRUNC('week', NOW()), 'DD/MM/YYYY')  AS semana_inicio,
-    TO_CHAR(NOW() AT TIME ZONE 'Europe/Madrid', 'DD/MM/YYYY HH24:MI') AS actualizado_a,
-    tw.sesiones,
-    tw.km_totales,
-    tw.horas_totales,
-    fn_pace_text(tw.avg_speed)                         AS ritmo_medio,
-    tw.fc_media,
-    tw.desnivel_total,
-    tw.calorias_totales,
-    tw.suffer_medio,
-    tw.trimp_semana,
-    a4.avg_km                                          AS objetivo_km_referencia,
-    GREATEST(ROUND(a4.avg_km - tw.km_totales, 1), 0)  AS km_restantes_para_objetivo,
-    -- Días transcurridos y restantes en la semana (lunes=1)
-    EXTRACT(ISODOW FROM NOW())::INTEGER                AS dia_semana_actual,
-    7 - EXTRACT(ISODOW FROM NOW())::INTEGER            AS dias_restantes_semana
+    TO_CHAR(DATE_TRUNC('week', NOW()), 'DD/MM/YYYY')  AS week_start,
+    TO_CHAR(NOW() AT TIME ZONE 'Europe/Madrid', 'DD/MM/YYYY HH24:MI') AS updated_at,
+    tw.sessions,
+    tw.total_km,
+    tw.total_hours,
+    fn_pace_text(tw.avg_speed)                         AS avg_pace,
+    tw.avg_hr,
+    tw.total_elevation_gain,
+    tw.total_calories,
+    tw.avg_suffer,
+    tw.weekly_trimp,
+    a4.avg_km                                          AS reference_km_target,
+    GREATEST(ROUND(a4.avg_km - tw.total_km, 1), 0)    AS km_remaining_to_target,
+    -- Elapsed and remaining days in the week (Monday = 1).
+    EXTRACT(ISODOW FROM NOW())::INTEGER                AS current_weekday,
+    7 - EXTRACT(ISODOW FROM NOW())::INTEGER            AS remaining_week_days
 FROM this_week tw, avg_4w a4;
 
 
 -- ------------------------------------------------------------
--- F2. Carga día a día de la semana actual
+-- F2. Day-by-day load for the current week
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Distribución de la carga dentro de la semana en curso.
---   Ideal ver patrón: días duros alternados con suaves.
---   Un suffer_score acumulado de lunes a domingo > 300 → semana de carga alta.
---   descanso indica los días sin actividad (necesarios para la recuperación).
+-- INTERPRETATION:
+--   Load distribution within the current week.
+--   Ideally, hard days alternate with easy days.
+--   A Monday-to-Sunday suffer_score above 300 indicates a high-load week.
+--   is_rest_day identifies days without activity, which are needed for recovery.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_current_week_daily_load AS
-WITH dias_semana AS (
+WITH week_days AS (
     SELECT
         generate_series(
             DATE_TRUNC('week', NOW()),
             DATE_TRUNC('week', NOW()) + INTERVAL '6 days',
             INTERVAL '1 day'
-        )::DATE AS dia
+        )::DATE AS day
 ),
-actividades_dia AS (
+day_activities AS (
     SELECT
-        DATE(a.start_date AT TIME ZONE 'Europe/Madrid')          AS dia,
-        COUNT(*)                                                   AS sesiones,
+        DATE(a.start_date AT TIME ZONE 'Europe/Madrid')          AS day,
+        COUNT(*)                                                   AS sessions,
         ROUND(SUM(a.distance) / 1000.0, 2)                        AS km,
-        ROUND(SUM(a.moving_time) / 60.0, 0)                       AS minutos,
-        ROUND(AVG(a.average_heartrate), 1)                         AS fc_media,
-        SUM(a.suffer_score)                                        AS suffer_acum,
-        SUM(a.calories)                                            AS calorias,
-        STRING_AGG(a.name, ' | ' ORDER BY a.start_date)           AS nombres_sesiones
+        ROUND(SUM(a.moving_time) / 60.0, 0)                       AS minutes,
+        ROUND(AVG(a.average_heartrate), 1)                         AS avg_hr,
+        SUM(a.suffer_score)                                        AS cumulative_suffer,
+        SUM(a.calories)                                            AS calories,
+        STRING_AGG(a.name, ' | ' ORDER BY a.start_date)           AS session_names
     FROM activities a
     WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
       AND a.trainer = false
       AND a.start_date >= DATE_TRUNC('week', NOW())
-    GROUP BY dia
+    GROUP BY day
 )
 SELECT
-    ds.dia,
-    TO_CHAR(ds.dia, 'TMDay')                           AS dia_nombre,
-    COALESCE(ad.sesiones, 0)                           AS sesiones,
+    ds.day,
+    TO_CHAR(ds.day, 'TMDay')                           AS day_name,
+    COALESCE(ad.sessions, 0)                           AS sessions,
     COALESCE(ad.km, 0)                                 AS km,
-    COALESCE(ad.minutos, 0)                            AS minutos_totales,
-    COALESCE(ad.fc_media, 0)                           AS fc_media,
-    COALESCE(ad.suffer_acum, 0)                        AS suffer_acumulado,
-    COALESCE(ad.calorias, 0)                           AS calorias,
-    COALESCE(ad.nombres_sesiones, '— Descanso —')      AS sesiones_nombre,
-    CASE WHEN ad.sesiones IS NULL THEN true ELSE false END AS dia_descanso,
-    -- Carga del día
+    COALESCE(ad.minutes, 0)                            AS total_minutes,
+    COALESCE(ad.avg_hr, 0)                             AS avg_hr,
+    COALESCE(ad.cumulative_suffer, 0)                  AS cumulative_suffer,
+    COALESCE(ad.calories, 0)                           AS calories,
+    COALESCE(ad.session_names, '— Rest —')             AS session_names,
+    CASE WHEN ad.sessions IS NULL THEN true ELSE false END AS is_rest_day,
+    -- Daily load.
     CASE
-        WHEN ad.suffer_acum IS NULL       THEN '💤 Descanso'
-        WHEN ad.suffer_acum < 25          THEN '🔵 Regenerativo'
-        WHEN ad.suffer_acum < 75          THEN '🟢 Suave'
-        WHEN ad.suffer_acum < 150         THEN '🟡 Moderado'
-        WHEN ad.suffer_acum < 250         THEN '🟠 Duro'
-        ELSE                                   '🔴 Muy duro'
-    END                                                AS carga_dia
-FROM dias_semana ds
-LEFT JOIN actividades_dia ad ON ad.dia = ds.dia
-ORDER BY ds.dia ASC;
+        WHEN ad.cumulative_suffer IS NULL       THEN '💤 Rest'
+        WHEN ad.cumulative_suffer < 25          THEN '🔵 Recovery'
+        WHEN ad.cumulative_suffer < 75          THEN '🟢 Easy'
+        WHEN ad.cumulative_suffer < 150         THEN '🟡 Moderate'
+        WHEN ad.cumulative_suffer < 250         THEN '🟠 Hard'
+        ELSE                                         '🔴 Very hard'
+    END                                                AS daily_load
+FROM week_days ds
+LEFT JOIN day_activities ad ON ad.day = ds.day
+ORDER BY ds.day ASC;
 
 
 -- ------------------------------------------------------------
--- F3. Detalle de cada sesión de la semana actual con laps
+-- F3. Current-week session detail with laps
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   La vista más granular de la semana en curso.
---   Muestra cada sesión con su desglose de laps.
---   Permite evaluar la sesión más reciente en tiempo real.
---   Si num_laps = 0 → la actividad no tiene laps registrados
---   (puede ser que el atleta no use laps automáticos o manuales).
+-- INTERPRETATION:
+--   The most granular view of the current week.
+--   Shows every session and its lap breakdown.
+--   Allows real-time evaluation of the most recent session.
+--   If lap_count = 0, the activity has no recorded laps.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_current_week_session_detail AS
 SELECT
     a.strava_id,
-    a.name                                                          AS actividad,
-    a.start_date AT TIME ZONE 'Europe/Madrid'                       AS fecha,
-    TO_CHAR(a.start_date AT TIME ZONE 'Europe/Madrid', 'TMDay DD/MM') AS dia,
+    a.name                                                          AS activity,
+    a.start_date AT TIME ZONE 'Europe/Madrid'                       AS date,
+    TO_CHAR(a.start_date AT TIME ZONE 'Europe/Madrid', 'TMDay DD/MM') AS day,
     a.sport_type,
     ROUND(a.distance / 1000.0, 2)                                   AS km,
-    fn_duration_text(a.moving_time)                                 AS tiempo_movimiento,
-    fn_pace_text(a.average_speed)                                   AS ritmo_medio,
-    fn_pace_text(a.max_speed)                                       AS ritmo_max,
-    a.average_heartrate                                             AS fc_media,
-    a.max_heartrate                                                 AS fc_max,
-    a.total_elevation_gain                                          AS desnivel,
+    fn_duration_text(a.moving_time)                                 AS moving_time,
+    fn_pace_text(a.average_speed)                                   AS avg_pace,
+    fn_pace_text(a.max_speed)                                       AS max_pace,
+    a.average_heartrate                                             AS avg_hr,
+    a.max_heartrate                                                 AS max_hr,
+    a.total_elevation_gain                                          AS elevation_gain,
     a.calories,
     a.suffer_score,
     a.perceived_exertion                                            AS rpe,
     a.description,
-    g.name                                                          AS zapatilla,
-    g.brand_name || ' ' || COALESCE(g.model_name, '')               AS modelo_zapatilla,
-    ROUND((AVG(a.average_speed) OVER ()) / NULLIF(a.average_heartrate, 0) * 1000, 3) AS eficiencia_vs_semana,
+    g.name                                                          AS shoe,
+    g.brand_name || ' ' || COALESCE(g.model_name, '')               AS shoe_model,
+    ROUND((AVG(a.average_speed) OVER ()) / NULLIF(a.average_heartrate, 0) * 1000, 3) AS efficiency_vs_week,
     CASE
-        WHEN a.suffer_score < 25  THEN 'Regenerativo'
-        WHEN a.suffer_score < 50  THEN 'Suave'
-        WHEN a.suffer_score < 100 THEN 'Moderado'
-        WHEN a.suffer_score < 150 THEN 'Duro'
-        ELSE                           'Muy duro'
-    END                                                             AS intensidad,
-    (SELECT COUNT(*) FROM activity_laps l WHERE l.activity_strava_id = a.strava_id) AS num_laps,
-    -- Mejor lap de la sesión (el más rápido)
+        WHEN a.suffer_score < 25  THEN 'Recovery'
+        WHEN a.suffer_score < 50  THEN 'Easy'
+        WHEN a.suffer_score < 100 THEN 'Moderate'
+        WHEN a.suffer_score < 150 THEN 'Hard'
+        ELSE                           'Very hard'
+    END                                                             AS intensity,
+    (SELECT COUNT(*) FROM activity_laps l WHERE l.activity_strava_id = a.strava_id) AS lap_count,
+    -- Best lap of the session (the fastest).
     (SELECT fn_pace_text(MAX(l2.average_speed))
-     FROM activity_laps l2 WHERE l2.activity_strava_id = a.strava_id)               AS mejor_lap_ritmo
+     FROM activity_laps l2 WHERE l2.activity_strava_id = a.strava_id)               AS best_lap_pace
 FROM activities a
 LEFT JOIN gears g ON g.strava_id = a.gear_id
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun', 'Hike')
@@ -944,39 +933,39 @@ ORDER BY a.start_date DESC;
 
 
 -- ------------------------------------------------------------
--- F4. Laps de la semana actual (granularidad máxima)
+-- F4. Current-week laps (maximum granularity)
 -- ------------------------------------------------------------
--- INTERPRETACIÓN:
---   Igual que v_last_week_lap_detail pero para la semana en curso.
---   delta_velocidad_vs_primer_lap_pct: positivo = más lento, negativo = más rápido.
---   Útil para analizar la sesión más reciente en tiempo casi real.
+-- INTERPRETATION:
+--   Equivalent to v_last_week_lap_detail for the current week.
+--   speed_delta_vs_first_lap_pct: positive = slower, negative = faster.
+--   Useful for near-real-time analysis of the most recent session.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_current_week_lap_detail AS
-WITH primer_lap_speed AS (
-    SELECT activity_strava_id, average_speed AS velocidad_primer_lap
+WITH first_lap_speed AS (
+    SELECT activity_strava_id, average_speed AS first_lap_speed
     FROM activity_laps
     WHERE lap_index = 0
 )
 SELECT
     a.strava_id     AS activity_id,
-    a.name          AS actividad,
-    a.start_date AT TIME ZONE 'Europe/Madrid'   AS fecha_actividad,
+    a.name          AS activity,
+    a.start_date AT TIME ZONE 'Europe/Madrid'   AS activity_date,
     l.lap_index + 1                             AS lap,
     ROUND(l.distance / 1000.0, 3)              AS km,
-    fn_duration_text(l.moving_time)             AS tiempo,
-    fn_pace_text(l.average_speed)               AS ritmo,
-    fn_pace_text(l.max_speed)                   AS ritmo_max_lap,
-    l.average_heartrate                         AS fc_media,
-    l.max_heartrate                             AS fc_max,
-    l.total_elevation_gain                      AS desnivel,
-    l.pace_zone                                 AS zona_ritmo,
+    fn_duration_text(l.moving_time)             AS time,
+    fn_pace_text(l.average_speed)               AS pace,
+    fn_pace_text(l.max_speed)                   AS max_lap_pace,
+    l.average_heartrate                         AS avg_hr,
+    l.max_heartrate                             AS max_hr,
+    l.total_elevation_gain                      AS elevation_gain,
+    l.pace_zone,
     ROUND(
-        (NULLIF(p.velocidad_primer_lap, 0) - l.average_speed)
-        / NULLIF(p.velocidad_primer_lap, 0) * 100
-    , 1)                                        AS delta_velocidad_vs_primer_lap_pct
+        (NULLIF(p.first_lap_speed, 0) - l.average_speed)
+        / NULLIF(p.first_lap_speed, 0) * 100
+    , 1)                                        AS speed_delta_vs_first_lap_pct
 FROM activity_laps l
 JOIN activities a       ON a.strava_id = l.activity_strava_id
-JOIN primer_lap_speed p ON p.activity_strava_id = l.activity_strava_id
+JOIN first_lap_speed p ON p.activity_strava_id = l.activity_strava_id
 WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun')
   AND a.trainer = false
   AND a.start_date >= DATE_TRUNC('week', NOW())
@@ -984,60 +973,60 @@ ORDER BY a.start_date ASC, l.lap_index ASC;
 
 
 -- ============================================================
--- QUERIES PARAMETRIZADAS — uso desde backend / herramienta
+-- PARAMETERIZED QUERIES — for backend or tool use
 -- ============================================================
--- Sustituir los valores entre << >> con los parámetros reales.
--- En Java/TypeScript usar PreparedStatement o query builder.
+-- Replace values between << >> with actual parameters.
+-- Use a PreparedStatement or query builder in Java/TypeScript.
 -- ============================================================
 
--- QP-1: Histórico de N meses hacia atrás (reemplaza '6 months')
+-- QP-1: Historical N-month lookback (replaces '6 months')
 -- SELECT * FROM v_historic_monthly_progression
--- WHERE anio * 100 + mes >= EXTRACT(YEAR FROM NOW() - INTERVAL '<<N>> months')::INT * 100
+-- WHERE year * 100 + month >= EXTRACT(YEAR FROM NOW() - INTERVAL '<<N>> months')::INT * 100
 --                         + EXTRACT(MONTH FROM NOW() - INTERVAL '<<N>> months')::INT
--- ORDER BY anio DESC, mes DESC;
+-- ORDER BY year DESC, month DESC;
 
--- QP-2: Resumen semanal rolling parametrizado
+-- QP-2: Parameterized rolling weekly summary
 -- SELECT * FROM v_rolling_weekly_fitness_trend
--- WHERE semana_inicio >= NOW() - INTERVAL '<<N>> weeks';
+-- WHERE week_start >= NOW() - INTERVAL '<<N>> weeks';
 
--- QP-3: Sesión específica + sus laps (por strava_id)
+-- QP-3: Specific session and its laps (by strava_id)
 -- SELECT a.*, l.*
 -- FROM activities a
 -- LEFT JOIN activity_laps l ON l.activity_strava_id = a.strava_id
 -- WHERE a.strava_id = <<STRAVA_ID>>
 -- ORDER BY l.lap_index ASC;
 
--- QP-4: Comparativa de rendimiento entre dos fechas
+-- QP-4: Performance comparison between two dates
 -- SELECT
---     fn_pace_text(AVG(a.average_speed)) AS ritmo_medio,
---     ROUND(AVG(a.average_heartrate), 1) AS fc_media,
---     ROUND(SUM(a.distance) / 1000.0, 1) AS km_totales,
---     ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC * 1000, 3) AS eficiencia
+--     fn_pace_text(AVG(a.average_speed)) AS avg_pace,
+--     ROUND(AVG(a.average_heartrate), 1) AS avg_hr,
+--     ROUND(SUM(a.distance) / 1000.0, 1) AS total_km,
+--     ROUND((AVG(a.average_speed) / NULLIF(AVG(a.average_heartrate), 0))::NUMERIC * 1000, 3) AS efficiency
 -- FROM activities a
 -- WHERE a.sport_type IN ('Run', 'VirtualRun', 'TrailRun')
---   AND a.start_date BETWEEN '<<FECHA_INICIO>>' AND '<<FECHA_FIN>>';
+--   AND a.start_date BETWEEN '<<START_DATE>>' AND '<<END_DATE>>';
 
--- QP-5: Detector de rachas (días consecutivos corriendo)
--- WITH dias AS (
---     SELECT DISTINCT DATE(start_date AT TIME ZONE 'Europe/Madrid') AS dia
+-- QP-5: Streak detector (consecutive running days)
+-- WITH days AS (
+--     SELECT DISTINCT DATE(start_date AT TIME ZONE 'Europe/Madrid') AS day
 --     FROM activities
 --     WHERE sport_type IN ('Run','VirtualRun','TrailRun')
 -- ),
--- grupos AS (
---     SELECT dia, dia - ROW_NUMBER() OVER (ORDER BY dia) * INTERVAL '1 day' AS grp
---     FROM dias
+-- groups AS (
+--     SELECT day, day - ROW_NUMBER() OVER (ORDER BY day) * INTERVAL '1 day' AS grp
+--     FROM days
 -- )
--- SELECT MIN(dia) AS inicio_racha, MAX(dia) AS fin_racha, COUNT(*) AS dias_consecutivos
--- FROM grupos
+-- SELECT MIN(day) AS streak_start, MAX(day) AS streak_end, COUNT(*) AS consecutive_days
+-- FROM groups
 -- GROUP BY grp
--- ORDER BY dias_consecutivos DESC
+-- ORDER BY consecutive_days DESC
 -- LIMIT 10;
 
 
 -- ============================================================
--- FIN DEL ARCHIVO
+-- END OF FILE
 -- ============================================================
--- Vistas creadas: 17
--- Funciones de apoyo: 3 (fn_fc_zone, fn_pace_text, fn_duration_text)
--- Queries parametrizadas: 5
+-- Views created: 17
+-- Helper functions: 3 (fn_hr_zone, fn_pace_text, fn_duration_text)
+-- Parameterized queries: 5
 -- ============================================================

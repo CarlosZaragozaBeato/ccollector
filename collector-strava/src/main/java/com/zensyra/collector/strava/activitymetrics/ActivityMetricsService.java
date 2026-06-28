@@ -2,6 +2,7 @@ package com.zensyra.collector.strava.activitymetrics;
 
 import com.zensyra.collector.strava.activity.Activity;
 import com.zensyra.collector.strava.activity.ActivityRepository;
+import com.zensyra.collector.strava.identity.StravaActivityIdentityService;
 import com.zensyra.collector.strava.stream.ActivityStreamRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -28,16 +29,19 @@ public class ActivityMetricsService {
     @Inject
     ActivityMetricsRepository metricsRepository;
 
+    @Inject
+    StravaActivityIdentityService activityIdentityService;
+
     @Transactional
     public void computeAndUpsert(Long athleteId) {
         List<Activity> activities = activityRepository.findActivitiesNeedingMetricsComputation(athleteId);
-        LOG.infof("ActivityMetricsService: procesando %d actividades para atleta %d", activities.size(), athleteId);
+        LOG.infof("ActivityMetricsService: processing %d activities for athlete %d", activities.size(), athleteId);
 
         for (Activity activity : activities) {
             try {
                 computeForActivity(activity);
             } catch (Exception e) {
-                LOG.errorf(e, "Error calculando métricas para actividad id=%d", activity.getId());
+                LOG.errorf(e, "Error calculating metrics for activity id=%d", activity.getId());
             }
         }
     }
@@ -47,6 +51,10 @@ public class ActivityMetricsService {
         if (watts.size() < ROLLING_WINDOW_SECONDS) {
             return;
         }
+
+        activityIdentityService.resolveOrCreateReference(
+                activity.getAthleteId(),
+                activity.getStravaId());
 
         double normalizedPower = computeNormalizedPower(watts);
         double averagePower = activity.getAverageWatts().doubleValue();

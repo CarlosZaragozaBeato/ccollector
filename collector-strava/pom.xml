@@ -14,16 +14,20 @@
 
     <artifactId>collector-strava</artifactId>
     <description>
-        Integración Strava: OAuth2, cliente HTTP, sincronización de atletas y actividades.
-        Implementa las interfaces definidas en collector-core.
+        Strava integration: OAuth2, HTTP client, athlete and activity synchronization.
+        Implements the interfaces defined in collector-core.
     </description>
 
     <dependencies>
 
-        <!-- ===== CORE (infra compartida) ===== -->
+        <!-- ===== CORE (shared infrastructure) ===== -->
         <dependency>
             <groupId>com.zensyra</groupId>
             <artifactId>collector-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.zensyra</groupId>
+            <artifactId>collector-query</artifactId>
         </dependency>
 
         <!-- ===== HTTP CLIENT ===== -->
@@ -36,13 +40,13 @@
             <artifactId>quarkus-rest-client-jackson</artifactId>
         </dependency>
 
-        <!-- ===== SERIALIZACIÓN ===== -->
+        <!-- ===== SERIALIZATION ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-jackson</artifactId>
         </dependency>
 
-        <!-- ===== OBSERVABILIDAD ===== -->
+        <!-- ===== OBSERVABILITY ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-health</artifactId>
@@ -52,7 +56,7 @@
             <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- ===== VALIDACIÓN ===== -->
+        <!-- ===== VALIDATION ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-hibernate-validator</artifactId>
@@ -88,10 +92,8 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
-            <version>1.19.8</version>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 
     <build>
@@ -107,8 +109,8 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- Genera META-INF/jandex.idx para que Quarkus descubra los beans
-                 de este módulo cuando se usa como dependencia en tests (ej: collector-api) -->
+            <!-- Generates META-INF/jandex.idx so Quarkus discovers this module's
+                 beans when it is used as a test dependency (for example, collector-api). -->
             <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>

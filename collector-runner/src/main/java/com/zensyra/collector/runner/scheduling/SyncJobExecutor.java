@@ -43,11 +43,11 @@ public class SyncJobExecutor {
         try {
             syncJob.execute(context);
             markSuccess(record.getId());
-            LOG.infof("Job '%s' ejecutado correctamente", syncJob.jobId());
+            LOG.infof("Job '%s' executed successfully", syncJob.jobId());
         } catch (Exception jobException) {
             try {
                 markFailure(record.getId(), record.getConsecutiveFailures() + 1);
-                LOG.errorf(jobException, "Job '%s' falló (fallos consecutivos: %d)",
+                LOG.errorf(jobException, "Job '%s' failed (consecutive failures: %d)",
                         syncJob.jobId(), record.getConsecutiveFailures() + 1);
             } catch (Exception markException) {
                 LOG.errorf(markException,
@@ -69,7 +69,7 @@ public class SyncJobExecutor {
         record.setJobId(jobId);
         record.setConsecutiveFailures(0);
         recordRepository.persist(record);
-        LOG.infof("Creado nuevo SyncJobRecord para job '%s'", jobId);
+        LOG.infof("Created a new SyncJobRecord for job '%s'", jobId);
         return record;
     }
 

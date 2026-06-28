@@ -1,7 +1,6 @@
 package com.zensyra.collector.strava.job;
 
 import com.zensyra.collector.core.oauth.OAuthToken;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.api.dto.StravaAthleteDto;
 import com.zensyra.collector.strava.athlete.AthleteUpsertService;
@@ -29,13 +28,13 @@ public class SyncAthleteJob extends AbstractStravaJob {
 
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
-        String externalUserId = token.getExternalUserId();
+        String externalUserId = externalUserId(token);
         try {
-            String accessToken = tokenService.getValidToken(IntegrationSource.STRAVA, externalUserId);
+            String accessToken = validAccessToken(token);
             StravaAthleteDto dto = stravaApiClient.getAthlete("Bearer " + accessToken);
             athleteUpsertService.upsert(dto);
         } catch (Exception e) {
-            LOG.errorf(e, "Error sincronizando atleta para usuario '%s'", externalUserId);
+            LOG.errorf(e, "Error synchronizing athlete for user '%s'", externalUserId);
             throw e;
         }
         return false;

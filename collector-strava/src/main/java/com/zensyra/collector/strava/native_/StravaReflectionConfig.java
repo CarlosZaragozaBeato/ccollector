@@ -10,12 +10,12 @@ import com.zensyra.collector.strava.api.dto.StravaLapDto;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
- * Registra los DTOs de Strava para reflexión en el binario nativo.
- * Jackson necesita acceder a getters/setters en runtime — sin este
- * registro GraalVM los elimina durante la compilación AOT.
+ * Registers Strava DTOs for reflection in the native binary. Jackson needs
+ * access to getters and setters at runtime; without this registration,
+ * GraalVM removes them during AOT compilation.
  *
- * El package se llama native_ (con guión bajo) para evitar conflicto
- * con la palabra reservada native de Java.
+ * The package is named native_ (with an underscore) to avoid a conflict with
+ * Java's native reserved word.
  */
 @RegisterForReflection(targets = {
         StravaAthleteDto.class,
@@ -27,5 +27,5 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
         StravaBestEffortDto.class
 })
 public class StravaReflectionConfig {
-    // Clase vacía — solo sirve como portador de la anotación
+    // Empty class that only carries the annotation.
 }
