@@ -3,8 +3,14 @@ package com.zensyra.collector.runner.query;
 import com.zensyra.collector.query.composer.ActivityQueryComposer;
 import com.zensyra.collector.query.port.ActivityMetricsQueryPort;
 import com.zensyra.collector.query.port.ActivityQueryPort;
+import com.zensyra.collector.query.port.AthleteStatsQueryPort;
+import com.zensyra.collector.query.port.BestEffortQueryPort;
+import com.zensyra.collector.query.port.TrainingLoadQueryPort;
 import com.zensyra.collector.strava.identity.StravaActivityMetricsQueryPort;
 import com.zensyra.collector.strava.identity.StravaActivityQueryPort;
+import com.zensyra.collector.strava.identity.StravaAthleteStatsQueryPort;
+import com.zensyra.collector.strava.identity.StravaBestEffortQueryPort;
+import com.zensyra.collector.strava.identity.StravaTrainingLoadQueryPort;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -23,13 +29,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * — {@code collector-query} does not depend on {@code collector-strava}
  * (per ADR-001), so neither module alone can prove this wiring works.
  *
- * <p>{@link com.zensyra.collector.query.composer.ActivityQueryComposerTest}
- * proves the composer's merge logic is correct using a hand-written
- * {@code Instance<T>} stand-in; it cannot prove Quarkus actually discovers
- * and injects {@link StravaActivityQueryPort} as a real CDI bean. This test
- * closes that gap before any {@code collector-api} resource is migrated to
- * depend on the composer — if the wiring were broken here, a resource-level
- * test would only show an empty result with no obvious cause.
+ * <p>Covers all five query ports introduced across Issue A and Issue A-2.
+ * Each port's own unit tests (e.g. {@code StravaBestEffortQueryPortTest})
+ * prove the adapter's logic is correct against mocked repositories; they
+ * cannot prove Quarkus actually discovers and injects that adapter as a
+ * real CDI bean. This test closes that gap for every port before any
+ * {@code collector-api} resource is allowed to depend on it.
  */
 @QuarkusTest
 class ActivityQueryPortWiringTest {
@@ -39,6 +44,15 @@ class ActivityQueryPortWiringTest {
 
     @Inject
     Instance<ActivityMetricsQueryPort> activityMetricsQueryPorts;
+
+    @Inject
+    Instance<BestEffortQueryPort> bestEffortQueryPorts;
+
+    @Inject
+    Instance<AthleteStatsQueryPort> athleteStatsQueryPorts;
+
+    @Inject
+    Instance<TrainingLoadQueryPort> trainingLoadQueryPorts;
 
     @Inject
     ActivityQueryComposer composer;
@@ -63,6 +77,39 @@ class ActivityQueryPortWiringTest {
         assertEquals(1, ports.size(),
                 "Expected exactly one ActivityMetricsQueryPort implementation today (Strava only)");
         assertInstanceOf(StravaActivityMetricsQueryPort.class, ports.get(0));
+    }
+
+    @Test
+    void shouldDiscoverTheStravaBestEffortQueryPortAsACdiBean() {
+        assertFalse(bestEffortQueryPorts.isUnsatisfied(),
+                "Expected at least one BestEffortQueryPort bean to be discovered by CDI");
+
+        List<BestEffortQueryPort> ports = bestEffortQueryPorts.stream().toList();
+        assertEquals(1, ports.size(),
+                "Expected exactly one BestEffortQueryPort implementation today (Strava only)");
+        assertInstanceOf(StravaBestEffortQueryPort.class, ports.get(0));
+    }
+
+    @Test
+    void shouldDiscoverTheStravaAthleteStatsQueryPortAsACdiBean() {
+        assertFalse(athleteStatsQueryPorts.isUnsatisfied(),
+                "Expected at least one AthleteStatsQueryPort bean to be discovered by CDI");
+
+        List<AthleteStatsQueryPort> ports = athleteStatsQueryPorts.stream().toList();
+        assertEquals(1, ports.size(),
+                "Expected exactly one AthleteStatsQueryPort implementation today (Strava only)");
+        assertInstanceOf(StravaAthleteStatsQueryPort.class, ports.get(0));
+    }
+
+    @Test
+    void shouldDiscoverTheStravaTrainingLoadQueryPortAsACdiBean() {
+        assertFalse(trainingLoadQueryPorts.isUnsatisfied(),
+                "Expected at least one TrainingLoadQueryPort bean to be discovered by CDI");
+
+        List<TrainingLoadQueryPort> ports = trainingLoadQueryPorts.stream().toList();
+        assertEquals(1, ports.size(),
+                "Expected exactly one TrainingLoadQueryPort implementation today (Strava only)");
+        assertInstanceOf(StravaTrainingLoadQueryPort.class, ports.get(0));
     }
 
     @Test

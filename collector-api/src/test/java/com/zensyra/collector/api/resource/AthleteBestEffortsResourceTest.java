@@ -1,45 +1,36 @@
 package com.zensyra.collector.api.resource;
 
-import com.zensyra.collector.strava.besteffort.ActivityBestEffort;
-import com.zensyra.collector.strava.besteffort.ActivityBestEffortRepository;
+import com.zensyra.collector.query.model.BestEffort;
+import com.zensyra.collector.query.port.BestEffortQueryPort;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @QuarkusTest
 class AthleteBestEffortsResourceTest {
 
     private static final String API_KEY = "test-api-key";
-    private static final Long ATHLETE_ID = 12345L;
+    private static final UUID ATHLETE_ID = UUID.randomUUID();
 
     @InjectMock
-    ActivityBestEffortRepository bestEffortRepository;
-
-    @InjectMock
-    @RestClient
-    com.zensyra.collector.strava.api.StravaApiClient stravaApiClient;
+    BestEffortQueryPort bestEffortQueryPort;
 
     @Test
     void shouldReturnBestEfforts() {
-        ActivityBestEffort effort = new ActivityBestEffort();
-        effort.setActivityStravaId(9001L);
-        effort.setName("10k");
-        effort.setDistance(10000);
-        effort.setElapsedTime(2400);
-        effort.setIsKom(false);
-        effort.setPrRank(1);
-
-        when(bestEffortRepository.findTopPrsByAthleteId(anyLong(), anyInt())).thenReturn(List.of(effort));
+        UUID activityId = UUID.randomUUID();
+        BestEffort effort = new BestEffort(activityId, "10k", 10000, 2400, 1);
+        when(bestEffortQueryPort.listTopByAthlete(eq(ATHLETE_ID), anyInt())).thenReturn(List.of(effort));
 
         given()
                 .header("X-API-Key", API_KEY)
@@ -49,10 +40,24 @@ class AthleteBestEffortsResourceTest {
                 .statusCode(200)
                 .body("limit", is(5))
                 .body("items", hasSize(1))
-                .body("items[0].activityStravaId", is(9001))
+                .body("items[0].activityId", is(activityId.toString()))
                 .body("items[0].name", is("10k"))
                 .body("items[0].distance", is(10000))
                 .body("items[0].prRank", is(1));
+    }
+
+    @Test
+    void shouldNotExposeIsKomOrAnyStravaSpecificField() {
+        BestEffort effort = new BestEffort(UUID.randomUUID(), "10k", 10000, 2400, 1);
+        when(bestEffortQueryPort.listTopByAthlete(eq(ATHLETE_ID), anyInt())).thenReturn(List.of(effort));
+
+        given()
+                .header("X-API-Key", API_KEY)
+                .when().get("/api/v1/athletes/{id}/best-efforts", ATHLETE_ID)
+                .then()
+                .statusCode(200)
+                .body("items[0]", org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasKey("isKom")))
+                .body("items[0]", org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasKey("activityStravaId")));
     }
 
     @Test
@@ -71,5 +76,17 @@ class AthleteBestEffortsResourceTest {
                 .when().get("/api/v1/athletes/{id}/best-efforts", ATHLETE_ID)
                 .then()
                 .statusCode(401);
+    }
+
+    @Test
+    void shouldReturnEmptyListWhenNoEfforts() {
+        when(bestEffortQueryPort.listTopByAthlete(any(), anyInt())).thenReturn(List.of());
+
+        given()
+                .header("X-API-Key", API_KEY)
+                .when().get("/api/v1/athletes/{id}/best-efforts", ATHLETE_ID)
+                .then()
+                .statusCode(200)
+                .body("items", hasSize(0));
     }
 }

@@ -1,7 +1,5 @@
 package com.zensyra.collector.strava.identity;
 
-import com.zensyra.collector.core.identity.ActivityReference;
-import com.zensyra.collector.core.identity.ActivityReferenceRepository;
 import com.zensyra.collector.core.identity.IntegrationAccount;
 import com.zensyra.collector.core.identity.IntegrationAccountRepository;
 import com.zensyra.collector.core.sync.IntegrationSource;
@@ -28,23 +26,23 @@ import java.util.UUID;
  * {@code externalUserId} is the legacy Strava athlete id, used to query
  * {@code collector-strava}'s own {@code Activity} rows. Each row is then
  * translated back to its canonical {@code ActivityId} via
- * {@link ActivityReferenceRepository}, never exposing a Strava id to the
+ * {@link ActivityReferenceResolver}, never exposing a Strava id to the
  * caller.
  */
 @ApplicationScoped
 public class StravaActivityQueryPort implements ActivityQueryPort {
 
     private final IntegrationAccountRepository integrationAccountRepository;
-    private final ActivityReferenceRepository activityReferenceRepository;
+    private final ActivityReferenceResolver activityReferenceResolver;
     private final ActivityRepository activityRepository;
 
     @Inject
     public StravaActivityQueryPort(
             IntegrationAccountRepository integrationAccountRepository,
-            ActivityReferenceRepository activityReferenceRepository,
+            ActivityReferenceResolver activityReferenceResolver,
             ActivityRepository activityRepository) {
         this.integrationAccountRepository = integrationAccountRepository;
-        this.activityReferenceRepository = activityReferenceRepository;
+        this.activityReferenceResolver = activityReferenceResolver;
         this.activityRepository = activityRepository;
     }
 
@@ -70,7 +68,8 @@ public class StravaActivityQueryPort implements ActivityQueryPort {
 
         List<Activity> result = new ArrayList<>(stravaActivities.size());
         for (com.zensyra.collector.strava.activity.Activity stravaActivity : stravaActivities) {
-            UUID canonicalActivityId = resolveCanonicalActivityId(account.get().getId(), stravaActivity);
+            UUID canonicalActivityId = activityReferenceResolver.resolveCanonicalActivityId(
+                    account.get().getId(), stravaActivity.getStravaId().toString());
             if (canonicalActivityId == null) {
                 // An activity exists in collector-strava's own tables but has
                 // no canonical ActivityReference yet. This should not happen
@@ -84,26 +83,17 @@ public class StravaActivityQueryPort implements ActivityQueryPort {
         return result;
     }
 
+    // Deliberately not optimized with a more specific repository method
+    // (e.g. findByAthleteIdAndSource). This fetches every connected
+    // account for the athlete and filters in memory for STRAVA, which is
+    // wasteful in theory once an athlete has many connected sources, but
+    // today every athlete has at most one (Strava is the only source).
+    // Revisit only if profiling shows this actually matters — see
+    // discussion in Issue A follow-up notes.
     private Optional<IntegrationAccount> resolveStravaAccount(UUID athleteId) {
-        // Deliberately not optimized with a more specific repository method
-        // (e.g. findByAthleteIdAndSource). This fetches every connected
-        // account for the athlete and filters in memory for STRAVA, which is
-        // wasteful in theory once an athlete has many connected sources, but
-        // today every athlete has at most one (Strava is the only source).
-        // Revisit only if profiling shows this actually matters — see
-        // discussion in Issue A follow-up notes.
         return integrationAccountRepository.findByAthleteId(athleteId).stream()
                 .filter(account -> account.getSource() == IntegrationSource.STRAVA)
                 .findFirst();
-    }
-
-    private UUID resolveCanonicalActivityId(
-            UUID integrationAccountId, com.zensyra.collector.strava.activity.Activity stravaActivity) {
-        return activityReferenceRepository
-                .findByIntegrationAccountIdAndExternalActivityId(
-                        integrationAccountId, stravaActivity.getStravaId().toString())
-                .map(ActivityReference::getTrainingSessionId)
-                .orElse(null);
     }
 
     private Activity toReadModel(

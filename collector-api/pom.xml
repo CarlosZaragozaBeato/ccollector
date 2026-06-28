@@ -27,7 +27,7 @@
         </dependency>
         <dependency>
             <groupId>com.zensyra</groupId>
-            <artifactId>collector-strava</artifactId>
+            <artifactId>collector-query</artifactId>
         </dependency>
 
         <!-- ===== REST (servidor) ===== -->

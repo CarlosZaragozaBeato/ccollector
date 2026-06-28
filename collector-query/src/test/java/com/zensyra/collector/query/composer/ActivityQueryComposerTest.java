@@ -1,6 +1,8 @@
 package com.zensyra.collector.query.composer;
 
 import com.zensyra.collector.query.model.Activity;
+import com.zensyra.collector.query.model.QueryResult;
+import com.zensyra.collector.query.model.SourceFailure;
 import com.zensyra.collector.query.port.ActivityQueryPort;
 import org.junit.jupiter.api.Test;
 
@@ -9,6 +11,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ActivityQueryComposerTest {
@@ -78,6 +82,69 @@ class ActivityQueryComposerTest {
         assertTrue(result.isEmpty());
     }
 
+    @Test
+    void listByAthleteShouldPropagateExceptionFromAFailingSource() {
+        // The /v1 contract: a failing source still fails the whole request.
+        // This must never change — listByAthleteWithFailures exists
+        // specifically so this method's behavior doesn't have to.
+        UUID athleteId = UUID.randomUUID();
+        FailingActivityQueryPort failingSource = new FailingActivityQueryPort("Strava down");
+        ActivityQueryComposer composer = new ActivityQueryComposer(FakeInstance.of(failingSource));
+
+        assertThrows(RuntimeException.class,
+                () -> composer.listByAthlete(athleteId, null, null, null, 0, 10));
+    }
+
+    @Test
+    void listByAthleteWithFailuresShouldReturnCompleteResultWhenAllSourcesSucceed() {
+        UUID athleteId = UUID.randomUUID();
+        Activity activity = activityAt(Instant.parse("2026-06-10T08:00:00Z"));
+        FakeActivityQueryPort source = new FakeActivityQueryPort(List.of(activity));
+        ActivityQueryComposer composer = new ActivityQueryComposer(FakeInstance.of(source));
+
+        QueryResult<Activity> result = composer.listByAthleteWithFailures(
+                athleteId, null, null, null, 0, 10);
+
+        assertFalse(result.isPartial());
+        assertEquals(List.of(activity), result.data());
+        assertTrue(result.failures().isEmpty());
+    }
+
+    @Test
+    void listByAthleteWithFailuresShouldRecordFailureAndReturnEmptyWhenOnlySourceFails() {
+        UUID athleteId = UUID.randomUUID();
+        FailingActivityQueryPort failingSource = new FailingActivityQueryPort("Strava down");
+        ActivityQueryComposer composer = new ActivityQueryComposer(FakeInstance.of(failingSource));
+
+        QueryResult<Activity> result = composer.listByAthleteWithFailures(
+                athleteId, null, null, null, 0, 10);
+
+        assertTrue(result.isPartial());
+        assertTrue(result.data().isEmpty());
+        assertEquals(1, result.failures().size());
+        SourceFailure failure = result.failures().get(0);
+        assertEquals("FailingActivityQueryPort", failure.sourceName());
+        assertEquals("Strava down", failure.reason());
+    }
+
+    @Test
+    void listByAthleteWithFailuresShouldKeepSucceedingSourceDataWhenAnotherSourceFails() {
+        UUID athleteId = UUID.randomUUID();
+        Activity activity = activityAt(Instant.parse("2026-06-10T08:00:00Z"));
+        FakeActivityQueryPort succeedingSource = new FakeActivityQueryPort(List.of(activity));
+        FailingActivityQueryPort failingSource = new FailingActivityQueryPort("timeout");
+        ActivityQueryComposer composer = new ActivityQueryComposer(
+                FakeInstance.of(succeedingSource, failingSource));
+
+        QueryResult<Activity> result = composer.listByAthleteWithFailures(
+                athleteId, null, null, null, 0, 10);
+
+        assertTrue(result.isPartial());
+        assertEquals(List.of(activity), result.data());
+        assertEquals(1, result.failures().size());
+        assertEquals("timeout", result.failures().get(0).reason());
+    }
+
     private static Activity activityAt(Instant startDate) {
         return new Activity(
                 UUID.randomUUID(),
@@ -110,6 +177,26 @@ class ActivityQueryComposerTest {
             int fromIndex = Math.min(offset, activities.size());
             int toIndex = Math.min(offset + limit, activities.size());
             return activities.subList(fromIndex, toIndex);
+        }
+    }
+
+    /**
+     * A source that always throws, simulating a connectivity failure or
+     * timeout against a real integration, to exercise both the strict
+     * ({@code listByAthlete}) and tolerant ({@code listByAthleteWithFailures})
+     * composition paths.
+     */
+    private static final class FailingActivityQueryPort implements ActivityQueryPort {
+        private final String message;
+
+        private FailingActivityQueryPort(String message) {
+            this.message = message;
+        }
+
+        @Override
+        public List<Activity> listByAthlete(
+                UUID athleteId, String sportType, Instant from, Instant to, int offset, int limit) {
+            throw new RuntimeException(message);
         }
     }
 }

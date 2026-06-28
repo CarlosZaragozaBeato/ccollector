@@ -14,7 +14,7 @@ import java.security.MessageDigest;
 import java.util.Optional;
 
 /**
- * Validates the X-API-Key header on every /api/v1/* route.
+ * Validates the X-API-Key header on every /api/v* route.
  * The token is configured through the COLLECTOR_API_KEY environment variable.
  *
  * @ApplicationScoped is required in the native binary: without an explicit CDI
@@ -36,7 +36,7 @@ public class ApiKeyFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext ctx) {
         String path = ctx.getUriInfo().getPath();
-        if (!path.startsWith("/api/v1") && !path.startsWith("api/v1")) {
+        if (!path.startsWith("/api/v") && !path.startsWith("api/v")) {
             return;
         }
 
