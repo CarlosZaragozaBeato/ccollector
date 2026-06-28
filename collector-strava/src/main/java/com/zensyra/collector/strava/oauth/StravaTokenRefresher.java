@@ -50,8 +50,8 @@ public class StravaTokenRefresher implements TokenRefresher {
         IntegrationCredential credential = credentialRepository
                 .findBySource(IntegrationSource.STRAVA)
                 .orElseThrow(() -> new TokenRefreshException(
-                        "No se encontraron credenciales de Strava en BD — " +
-                                "inserta una fila en integration_credentials con source='STRAVA'"
+                        "No Strava credentials were found in the database — " +
+                                "insert a row in integration_credentials with source='STRAVA'"
                 ));
 
         String body = buildFormBody(

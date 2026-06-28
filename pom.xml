@@ -15,6 +15,7 @@
 
     <modules>
         <module>collector-core</module>
+        <module>collector-query</module>
         <module>collector-strava</module>
         <module>collector-api</module>
         <module>collector-runner</module>
@@ -41,11 +42,31 @@
         <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
         <maven-failsafe-plugin.version>3.2.5</maven-failsafe-plugin.version>
         <spotbugs-plugin.version>4.9.8.3</spotbugs-plugin.version>
+
+        <testcontainers.version>1.21.4</testcontainers.version>
+
     </properties>
 
     <dependencyManagement>
         <dependencies>
-            <!-- Quarkus BOM — gestiona todas las versiones de extensiones -->
+            <!-- Pinned explicitly, BEFORE the Quarkus BOM import below, so
+     this version wins over whatever org.testcontainers:postgresql
+     version the Quarkus BOM manages internally for its own
+     Dev Services deployment extensions. Maven's dependencyManagement
+     conflict resolution is first-declaration-wins, not
+     nearest-wins — declaration order here is load-bearing. -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${testcontainers.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers</artifactId>
+                <version>${testcontainers.version}</version>
+            </dependency>
+
+            <!-- Quarkus BOM manages all extension versions. -->
             <dependency>
                 <groupId>${quarkus.platform.group-id}</groupId>
                 <artifactId>${quarkus.platform.artifact-id}</artifactId>
@@ -54,7 +75,7 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- Módulos internos -->
+            <!-- Internal modules -->
             <dependency>
                 <groupId>com.zensyra</groupId>
                 <artifactId>collector-core</artifactId>
@@ -70,6 +91,13 @@
                 <artifactId>collector-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
+            <dependency>
+                <groupId>com.zensyra</groupId>
+                <artifactId>collector-query</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
         </dependencies>
     </dependencyManagement>
 
@@ -187,7 +215,7 @@
             <properties>
                 <quarkus.native.enabled>true</quarkus.native.enabled>
                 <quarkus.package.jar.enabled>false</quarkus.package.jar.enabled>
-                <!-- Compilar con Mandrel dentro de Docker — no requiere GraalVM local -->
+                <!-- Build with Mandrel in Docker — no local GraalVM required. -->
                 <quarkus.native.container-build>true</quarkus.native.container-build>
                 <quarkus.native.builder-image>quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-21</quarkus.native.builder-image>
             </properties>

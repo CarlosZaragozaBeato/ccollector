@@ -1,7 +1,6 @@
 package com.zensyra.collector.strava.job;
 
 import com.zensyra.collector.core.oauth.OAuthToken;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.api.dto.StravaRouteDto;
 import com.zensyra.collector.strava.metrics.StravaCollectorMetrics;
@@ -42,10 +41,10 @@ public class SyncRoutesJob extends AbstractStravaJob {
 
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
-        String externalUserId = token.getExternalUserId();
+        String externalUserId = externalUserId(token);
         try {
             Long athleteId = parseAthleteId(externalUserId);
-            String accessToken = tokenService.getValidToken(IntegrationSource.STRAVA, externalUserId);
+            String accessToken = validAccessToken(token);
             String bearer = "Bearer " + accessToken;
             int page = 1;
             int totalSynced = 0;
@@ -58,7 +57,7 @@ public class SyncRoutesJob extends AbstractStravaJob {
                 } catch (WebApplicationException e) {
                     if (e.getResponse() != null && e.getResponse().getStatus() == HTTP_TOO_MANY_REQUESTS) {
                         metrics.incrementRateLimitHits();
-                        LOG.warnf("Strava 429 en página %d — abortando paginación para usuario '%s'",
+                        LOG.warnf("Strava 429 on page %d — aborting pagination for user '%s'",
                                 page, externalUserId);
                         return true;
                     }
@@ -72,7 +71,7 @@ public class SyncRoutesJob extends AbstractStravaJob {
                     totalSynced++;
                 }
 
-                LOG.infof("SyncRoutesJob — usuario: '%s', página %d, %d rutas procesadas",
+                LOG.infof("SyncRoutesJob — user: '%s', page %d, %d routes processed",
                         externalUserId, page, routes.size());
 
                 if (routes.size() < PER_PAGE) break;
@@ -80,11 +79,11 @@ public class SyncRoutesJob extends AbstractStravaJob {
                 page++;
             }
 
-            LOG.infof("SyncRoutesJob completado — usuario: '%s', total sincronizadas: %d",
+            LOG.infof("SyncRoutesJob completed — user: '%s', total synchronized: %d",
                     externalUserId, totalSynced);
 
         } catch (Exception e) {
-            LOG.errorf(e, "Error sincronizando rutas para usuario '%s'", externalUserId);
+            LOG.errorf(e, "Error synchronizing routes for user '%s'", externalUserId);
             throw e;
         }
         return false;

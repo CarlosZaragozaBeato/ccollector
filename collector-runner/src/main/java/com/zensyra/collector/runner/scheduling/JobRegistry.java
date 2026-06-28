@@ -28,7 +28,7 @@ public class JobRegistry {
 
     void onStart(@Observes StartupEvent event) {
         if (collectors.isUnsatisfied()) {
-            LOG.warn("No DataCollectors found — el scheduler está operativo pero sin jobs registrados");
+            LOG.warn("No DataCollectors found — the scheduler is running but no jobs are registered");
             return;
         }
 
@@ -42,7 +42,7 @@ public class JobRegistry {
         }
 
         this.registeredJobCount = totalJobs;
-        LOG.infof("JobRegistry: %d job(s) registrados en el scheduler", totalJobs);
+        LOG.infof("JobRegistry: %d job(s) registered with the scheduler", totalJobs);
     }
 
     /**
@@ -66,6 +66,6 @@ public class JobRegistry {
                 })
                 .schedule();
 
-        LOG.infof("Job registrado — id: '%s', cron: '%s'", job.jobId(), job.cronExpression());
+        LOG.infof("Job registered — id: '%s', cron: '%s'", job.jobId(), job.cronExpression());
     }
 }

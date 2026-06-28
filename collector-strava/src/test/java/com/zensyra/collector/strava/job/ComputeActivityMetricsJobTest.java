@@ -1,5 +1,7 @@
 package com.zensyra.collector.strava.job;
 
+import com.zensyra.collector.core.identity.IntegrationAccount;
+import com.zensyra.collector.core.identity.IntegrationAccountRepository;
 import com.zensyra.collector.core.oauth.OAuthToken;
 import com.zensyra.collector.core.oauth.OAuthTokenRepository;
 import com.zensyra.collector.core.sync.IntegrationSource;
@@ -13,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -23,6 +26,9 @@ class ComputeActivityMetricsJobTest {
 
     @InjectMock
     OAuthTokenRepository tokenRepository;
+
+    @InjectMock
+    IntegrationAccountRepository integrationAccountRepository;
 
     @InjectMock
     ActivityMetricsService activityMetricsService;
@@ -38,6 +44,24 @@ class ComputeActivityMetricsJobTest {
         assertDoesNotThrow(() -> job.execute(context));
 
         verify(activityMetricsService).computeAndUpsert(42L);
+    }
+
+    @Test
+    void shouldUseExternalUserIdFromLinkedIntegrationAccount() {
+        IntegrationAccount account = new IntegrationAccount(
+                java.util.UUID.randomUUID(),
+                IntegrationSource.STRAVA,
+                "42"
+        );
+        OAuthToken token = makeToken("999");
+        token.setIntegrationAccountId(account.getId());
+        when(tokenRepository.findAllBySource(IntegrationSource.STRAVA)).thenReturn(List.of(token));
+        when(integrationAccountRepository.findByIdOptional(account.getId())).thenReturn(Optional.of(account));
+
+        assertDoesNotThrow(() -> job.execute(buildContext()));
+
+        verify(activityMetricsService).computeAndUpsert(42L);
+        verify(activityMetricsService, never()).computeAndUpsert(999L);
     }
 
     @Test

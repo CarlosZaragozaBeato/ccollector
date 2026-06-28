@@ -1,5 +1,5 @@
 # zensyra-collector — task runner
-# Uso: just <task>
+# Usage: just <task>
 set shell := ["bash", "-c"]
 
 # ── Dev ──────────────────────────────────────────────────────────────────────
@@ -10,35 +10,35 @@ dev:
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
-# Compilar todos los módulos
+# Build all modules
 build:
     mise exec -- ./mvnw clean package -DskipTests
 
-# Compilar sin tests, rápido
+# Build without tests, quickly
 build-fast:
     mise exec -- ./mvnw clean package -DskipTests -T 4
 
-# Compilar binario nativo (requiere GraalVM)
+# Build the native binary (requires GraalVM)
 native:
     mise exec -- ./mvnw clean package -Pnative -pl collector-runner -am
 
 # ── Test ─────────────────────────────────────────────────────────────────────
 
-# Todos los tests
+# Run all tests
 test:
     mise exec -- ./mvnw test
 
-# Tests de un módulo concreto (uso: just test-module collector-strava)
+# Tests for one module (usage: just test-module collector-strava)
 test-module module:
     mise exec -- ./mvnw test -pl {{module}}
 
-# Tests de integración
+# Integration tests
 test-integration:
     mise exec -- ./mvnw verify -pl collector-runner
 
 # ── Utils ────────────────────────────────────────────────────────────────────
 
-# Ver árbol de dependencias del runner
+# Display the runner dependency tree
 deps:
     mise exec -- ./mvnw dependency:tree -pl collector-runner
 
@@ -46,7 +46,7 @@ deps:
 clean:
     mise exec -- ./mvnw clean
 
-# Versión de Java y Quarkus
+# Java and Quarkus versions
 info:
     java -version
     mise exec -- ./mvnw --version

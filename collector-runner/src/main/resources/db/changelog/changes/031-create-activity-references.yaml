@@ -1,0 +1,101 @@
+databaseChangeLog:
+  - changeSet:
+      id: 031-create-activity-references
+      author: zensyra
+      comment: Creates source observations that connect provider activities to canonical multi-integration sessions.
+      changes:
+        - createTable:
+            tableName: activity_references
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_activity_references
+                    nullable: false
+              - column:
+                  name: athlete_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: training_session_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: integration_account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: external_activity_id
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: activity_references
+            baseColumnNames: athlete_id
+            referencedTableName: athlete_profiles
+            referencedColumnNames: id
+            constraintName: fk_activity_references_athlete_id
+        - addForeignKeyConstraint:
+            baseTableName: activity_references
+            baseColumnNames: training_session_id
+            referencedTableName: training_sessions
+            referencedColumnNames: id
+            constraintName: fk_activity_references_training_session_id
+        - addForeignKeyConstraint:
+            baseTableName: activity_references
+            baseColumnNames: integration_account_id
+            referencedTableName: integration_accounts
+            referencedColumnNames: id
+            constraintName: fk_activity_references_integration_account_id
+        - addUniqueConstraint:
+            tableName: activity_references
+            columnNames: integration_account_id, external_activity_id
+            constraintName: uq_activity_references_account_external_activity
+        - createIndex:
+            tableName: activity_references
+            indexName: idx_activity_references_athlete_id
+            columns:
+              - column:
+                  name: athlete_id
+        - createIndex:
+            tableName: activity_references
+            indexName: idx_activity_references_training_session_id
+            columns:
+              - column:
+                  name: training_session_id
+      rollback:
+        - dropIndex:
+            tableName: activity_references
+            indexName: idx_activity_references_training_session_id
+        - dropIndex:
+            tableName: activity_references
+            indexName: idx_activity_references_athlete_id
+        - dropUniqueConstraint:
+            tableName: activity_references
+            constraintName: uq_activity_references_account_external_activity
+        - dropForeignKeyConstraint:
+            baseTableName: activity_references
+            constraintName: fk_activity_references_integration_account_id
+        - dropForeignKeyConstraint:
+            baseTableName: activity_references
+            constraintName: fk_activity_references_training_session_id
+        - dropForeignKeyConstraint:
+            baseTableName: activity_references
+            constraintName: fk_activity_references_athlete_id
+        - dropTable:
+            tableName: activity_references

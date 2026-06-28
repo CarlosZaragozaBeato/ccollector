@@ -49,13 +49,13 @@ public class ActivityDetailUpsertService {
                     }
 
                     if (!dto.getBestEfforts().isEmpty()) {
-                        activityBestEffortUpsertService.upsertBestEfforts(dto.getId(), dto.getBestEfforts());
+                        activityBestEffortUpsertService.upsertBestEfforts(activity, dto.getBestEfforts());
                     }
 
                     metrics.incrementActivitiesSynced();
                     LOG.debugf("Activity detail upserted — stravaId: %d", dto.getId());
                 },
-                () -> LOG.warnf("Activity detail: no se encontró actividad con stravaId=%d", dto.getId())
+                () -> LOG.warnf("Activity detail: no activity found with stravaId=%d", dto.getId())
         );
     }
 }

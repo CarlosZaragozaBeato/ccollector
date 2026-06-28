@@ -1,6 +1,7 @@
 package com.zensyra.collector.strava.activity;
 
 import com.zensyra.collector.strava.api.dto.StravaActivityDto;
+import com.zensyra.collector.strava.identity.StravaActivityIdentityService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -16,6 +17,9 @@ public class ActivityUpsertService {
 
     @Inject
     ActivityRepository activityRepository;
+
+    @Inject
+    StravaActivityIdentityService activityIdentityService;
 
     @Transactional
     public void upsert(StravaActivityDto dto) {
@@ -69,6 +73,7 @@ public class ActivityUpsertService {
         }
 
         activityRepository.persist(activity);
+        activityIdentityService.resolveOrCreateReference(dto.getAthleteId(), dto.getId());
 
         LOG.debugf("Activity upserted — stravaId: %d, nombre: '%s'", dto.getId(), dto.getName());
     }

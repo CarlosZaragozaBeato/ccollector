@@ -27,13 +27,13 @@ public class ComputeActivityMetricsJob extends AbstractStravaJob {
 
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
-        String externalUserId = token.getExternalUserId();
+        String externalUserId = externalUserId(token);
         try {
             Long athleteId = parseAthleteId(externalUserId);
             activityMetricsService.computeAndUpsert(athleteId);
-            LOG.infof("ComputeActivityMetricsJob completado — usuario: '%s'", externalUserId);
+            LOG.infof("ComputeActivityMetricsJob completed — user: '%s'", externalUserId);
         } catch (Exception e) {
-            LOG.errorf(e, "Error calculando métricas de actividad para usuario '%s'", externalUserId);
+            LOG.errorf(e, "Error calculating activity metrics for user '%s'", externalUserId);
         }
         return false;
     }

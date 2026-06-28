@@ -99,7 +99,7 @@ public class Activity extends PanacheEntityBase {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    // --- campos de detalle ---
+    // --- detail fields ---
 
     @Column
     private Integer calories;
@@ -129,7 +129,7 @@ public class Activity extends PanacheEntityBase {
     @Column(name = "streams_last_requested_at")
     private Instant streamsLastRequestedAt;
 
-    // getters y setters:
+    // getters and setters:
     public Integer getCalories() { return calories; }
     public void setCalories(Integer calories) { this.calories = calories; }
 
