@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: 034-enforce-oauth-tokens-integration-account-not-null
+      author: zensyra
+      comment: >
+        Enforces that every OAuth token is linked to a canonical integration account.
+        Must run strictly after 033-backfill-strava-canonical-data, which guarantees
+        zero unlinked tokens before this constraint is applied. If this changeset fails,
+        the backfill left orphaned tokens and must be investigated before retrying.
+      preConditions:
+        - onFail: HALT
+        - sqlCheck:
+            expectedResult: "0"
+            sql: >
+              SELECT COUNT(*) FROM oauth_tokens WHERE integration_account_id IS NULL
+      changes:
+        - addNotNullConstraint:
+            tableName: oauth_tokens
+            columnName: integration_account_id
+            columnDataType: UUID
+      rollback:
+        - dropNotNullConstraint:
+            tableName: oauth_tokens
+            columnName: integration_account_id
+            columnDataType: UUID

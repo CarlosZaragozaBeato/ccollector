@@ -19,9 +19,9 @@ import java.util.stream.Collectors;
  * Computes daily training load metrics (CTL, ATL, TSB) per athlete using
  * exponential moving averages over estimated TSS.
  *
- * TSS estimado: (moving_time_seconds / 3600) × IF² × 100, con IF = 0.75
- * CTL (fitness):  EMA de 42 días — α = 1/42
- * ATL (fatigue):  EMA de  7 días — α = 1/7
+ * Estimated TSS: (moving_time_seconds / 3600) × IF² × 100, with IF = 0.75.
+ * CTL (fitness): 42-day EMA — α = 1/42.
+ * ATL (fatigue): 7-day EMA — α = 1/7.
  * TSB (form):     CTL − ATL
  */
 @ApplicationScoped

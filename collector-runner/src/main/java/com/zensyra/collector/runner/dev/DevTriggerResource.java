@@ -39,7 +39,7 @@ public class DevTriggerResource {
                     try {
                         syncJobExecutor.execute(job);
                     } catch (Exception e) {
-                        LOG.errorf(e, "DevTriggerResource: job '%s' falló", jobId);
+                        LOG.errorf(e, "DevTriggerResource: job '%s' failed", jobId);
                         return Response.serverError()
                                 .entity(Map.of("error", "job execution failed", "job", jobId))
                                 .build();

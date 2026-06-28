@@ -24,7 +24,7 @@ public class ActivityLapUpsertService {
 
         long deleted = lapRepository.deleteByActivityStravaId(activityStravaId);
         if (deleted > 0) {
-            LOG.debugf("ActivityLapUpsertService: eliminados %d laps previos para actividad %d",
+            LOG.debugf("ActivityLapUpsertService: deleted %d previous laps for activity %d",
                     deleted, activityStravaId);
         }
 
@@ -68,7 +68,7 @@ public class ActivityLapUpsertService {
             lapRepository.persist(lap);
         }
 
-        LOG.debugf("ActivityLapUpsertService: %d laps insertados para actividad %d",
+        LOG.debugf("ActivityLapUpsertService: inserted %d laps for activity %d",
                 dtos.size(), activityStravaId);
     }
 }

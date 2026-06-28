@@ -14,20 +14,20 @@
 
     <artifactId>collector-api</artifactId>
     <description>
-        API REST de lectura pública. Expone actividades, training load y estadísticas
-        para consumo por TTemplate y BBrain sin acceso directo a la base de datos.
+        Public read REST API. Exposes activities, training load, and statistics
+        to TTemplate and BBrain without direct database access.
     </description>
 
     <dependencies>
 
-        <!-- ===== MÓDULOS INTERNOS ===== -->
+        <!-- ===== INTERNAL MODULES ===== -->
         <dependency>
             <groupId>com.zensyra</groupId>
             <artifactId>collector-core</artifactId>
         </dependency>
         <dependency>
             <groupId>com.zensyra</groupId>
-            <artifactId>collector-strava</artifactId>
+            <artifactId>collector-query</artifactId>
         </dependency>
 
         <!-- ===== REST (servidor) ===== -->
@@ -40,7 +40,7 @@
             <artifactId>quarkus-rest-jackson</artifactId>
         </dependency>
 
-        <!-- ===== REST CLIENT (necesario para que StravaApiClient sea CDI bean en tests) ===== -->
+        <!-- ===== REST CLIENT (required for StravaApiClient to be a CDI bean in tests) ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-rest-client</artifactId>
@@ -50,7 +50,7 @@
             <artifactId>quarkus-rest-client-jackson</artifactId>
         </dependency>
 
-        <!-- ===== VALIDACIÓN ===== -->
+        <!-- ===== VALIDATION ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-hibernate-validator</artifactId>
@@ -93,9 +93,9 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- Genera META-INF/jandex.idx para que Quarkus descubra los beans
-                 y recursos JAX-RS de este módulo cuando collector-runner compila
-                 el binario nativo con Mandrel -->
+            <!-- Generates META-INF/jandex.idx so Quarkus discovers this module's
+                 beans and JAX-RS resources when collector-runner builds the
+                 native binary with Mandrel. -->
             <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>

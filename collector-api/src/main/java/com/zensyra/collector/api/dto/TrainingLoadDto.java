@@ -1,6 +1,6 @@
 package com.zensyra.collector.api.dto;
 
-import com.zensyra.collector.strava.trainingload.AthleteTrainingLoad;
+import com.zensyra.collector.query.model.TrainingLoad;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 import java.time.LocalDate;
@@ -13,7 +13,7 @@ public record TrainingLoadDto(
         Double atl,
         Double tsb
 ) {
-    public static TrainingLoadDto from(AthleteTrainingLoad r) {
-        return new TrainingLoadDto(r.getDate(), r.getTssDay(), r.getCtl(), r.getAtl(), r.getTsb());
+    public static TrainingLoadDto from(TrainingLoad load) {
+        return new TrainingLoadDto(load.date(), load.tssDay(), load.ctl(), load.atl(), load.tsb());
     }
 }

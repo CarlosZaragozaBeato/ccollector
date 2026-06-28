@@ -1,0 +1,52 @@
+databaseChangeLog:
+  - changeSet:
+      id: 030-create-training-sessions
+      author: zensyra
+      comment: Creates canonical training sessions that can aggregate activities from multiple integrations.
+      changes:
+        - createTable:
+            tableName: training_sessions
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_training_sessions
+                    nullable: false
+              - column:
+                  name: athlete_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: training_sessions
+            baseColumnNames: athlete_id
+            referencedTableName: athlete_profiles
+            referencedColumnNames: id
+            constraintName: fk_training_sessions_athlete_id
+        - createIndex:
+            tableName: training_sessions
+            indexName: idx_training_sessions_athlete_id
+            columns:
+              - column:
+                  name: athlete_id
+      rollback:
+        - dropIndex:
+            tableName: training_sessions
+            indexName: idx_training_sessions_athlete_id
+        - dropForeignKeyConstraint:
+            baseTableName: training_sessions
+            constraintName: fk_training_sessions_athlete_id
+        - dropTable:
+            tableName: training_sessions

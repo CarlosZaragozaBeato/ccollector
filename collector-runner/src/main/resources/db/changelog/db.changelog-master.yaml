@@ -16,3 +16,24 @@ databaseChangeLog:
 
   - include:
       file: db/changelog/changes/027-widen-encrypted-columns.yaml
+
+  - include:
+      file: db/changelog/changes/028-create-athlete-profiles.yaml
+
+  - include:
+      file: db/changelog/changes/029-create-integration-accounts.yaml
+
+  - include:
+      file: db/changelog/changes/030-create-training-sessions.yaml
+
+  - include:
+      file: db/changelog/changes/031-create-activity-references.yaml
+
+  - include:
+      file: db/changelog/changes/032-link-oauth-tokens-to-integration-accounts.yaml
+
+  - include:
+      file: db/changelog/changes/033-backfill-strava-canonical-data.yaml
+
+  - include:
+      file: db/changelog/changes/034-enforce-oauth-tokens-integration-account-not-null.yaml

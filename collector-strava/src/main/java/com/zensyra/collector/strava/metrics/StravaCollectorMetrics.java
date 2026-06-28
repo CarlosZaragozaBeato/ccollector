@@ -1,5 +1,7 @@
 package com.zensyra.collector.strava.metrics;
 
+import com.zensyra.collector.core.identity.IntegrationAccount;
+import com.zensyra.collector.core.identity.IntegrationAccountRepository;
 import com.zensyra.collector.core.oauth.OAuthTokenRepository;
 import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.strava.ratelimit.StravaRateLimiter;
@@ -41,6 +43,7 @@ public final class StravaCollectorMetrics {
     private final MeterRegistry registry;
     private final com.zensyra.collector.strava.activity.ActivityRepository activityRepository;
     private final OAuthTokenRepository tokenRepository;
+    private final IntegrationAccountRepository integrationAccountRepository;
 
     /**
      * Builds all meters and registers them with the global registry.
@@ -53,52 +56,54 @@ public final class StravaCollectorMetrics {
             final MeterRegistry registry,
             final StravaRateLimiter rateLimiter,
             final com.zensyra.collector.strava.activity.ActivityRepository activityRepository,
-            final OAuthTokenRepository tokenRepository) {
+            final OAuthTokenRepository tokenRepository,
+            final IntegrationAccountRepository integrationAccountRepository) {
 
         this.registry = registry;
         this.activityRepository = activityRepository;
         this.tokenRepository = tokenRepository;
+        this.integrationAccountRepository = integrationAccountRepository;
 
         this.activitiesSynced = Counter
             .builder("strava.activities.synced")
-            .description("Actividades sincronizadas correctamente")
+            .description("Activities synchronized successfully")
             .register(registry);
         this.activitiesFailed = Counter
             .builder("strava.activities.failed")
-            .description("Actividades que fallaron al sincronizar")
+            .description("Activities that failed to synchronize")
             .register(registry);
         this.lapsSynced = Counter
             .builder("strava.laps.synced")
-            .description("Vueltas sincronizadas")
+            .description("Laps synchronized")
             .register(registry);
         this.rateLimitHits = Counter
             .builder("strava.rate_limit.hits")
-            .description("Veces que Strava devolvio 429")
+            .description("Number of times Strava returned HTTP 429")
             .register(registry);
         this.activityDetailTimer = Timer
             .builder("strava.activity_detail.duration")
-            .description("Tiempo de ejecucion de SyncActivityDetailJob")
+            .description("Execution time of SyncActivityDetailJob")
             .register(registry);
         this.activityStreamsSynced = Counter
             .builder("strava.activity_streams.synced")
-            .description("Actividades con streams sincronizados")
+            .description("Activities with synchronized streams")
             .register(registry);
         this.activityStreamRowsWritten = Counter
             .builder("strava.activity_stream_rows.written")
-            .description("Filas de streams persistidas")
+            .description("Persisted stream rows")
             .register(registry);
         this.activityStreamSyncErrors = Counter
             .builder("strava.activity_streams.errors")
-            .description("Errores sincronizando streams")
+            .description("Errors while synchronizing streams")
             .register(registry);
         this.activityStreamSyncTimer = Timer
             .builder("strava.activity_stream_sync.duration")
-            .description("Tiempo de sincronizacion de streams por actividad")
+            .description("Stream synchronization time per activity")
             .register(registry);
 
         Gauge.builder("strava.rate_limiter.available_permits", rateLimiter,
                 rl -> (double) rl.availablePermits())
-            .description("Permisos disponibles en el rate limiter de Strava")
+            .description("Available permits in the Strava rate limiter")
             .register(registry);
     }
 
@@ -110,11 +115,17 @@ public final class StravaCollectorMetrics {
      */
     void onStart(@Observes final StartupEvent ev) {
         tokenRepository.findAllBySource(IntegrationSource.STRAVA).forEach(token -> {
-            long athleteId = Long.parseLong(token.getExternalUserId());
+            IntegrationAccount account = token.getIntegrationAccountId() == null
+                    ? null
+                    : integrationAccountRepository.findByIdOptional(token.getIntegrationAccountId()).orElse(null);
+            String externalUserId = account != null
+                    ? account.getExternalUserId()
+                    : token.getExternalUserId();
+            long athleteId = Long.parseLong(externalUserId);
             Gauge.builder("strava.activity_streams.backlog", activityRepository,
                     repository -> (double) repository.countPendingStreamActivities(athleteId, 3))
-                .description("Actividades pendientes de sincronizar streams")
-                .tag("athlete_id", token.getExternalUserId())
+                .description("Activities pending stream synchronization")
+                .tag("athlete_id", externalUserId)
                 .register(registry);
         });
     }

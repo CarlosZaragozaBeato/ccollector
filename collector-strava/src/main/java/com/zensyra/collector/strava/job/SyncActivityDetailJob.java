@@ -1,7 +1,6 @@
 package com.zensyra.collector.strava.job;
 
 import com.zensyra.collector.core.oauth.OAuthToken;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.activity.ActivityDetailUpsertService;
 import com.zensyra.collector.strava.activity.ActivityRepository;
@@ -51,13 +50,14 @@ public class SyncActivityDetailJob extends AbstractStravaJob {
 
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
-        syncDetailForUser(token.getExternalUserId());
+        syncDetailForUser(token);
         return false;
     }
 
-    private void syncDetailForUser(String externalUserId) {
+    private void syncDetailForUser(OAuthToken token) {
+        String externalUserId = externalUserId(token);
         try {
-            String accessToken = tokenService.getValidToken(IntegrationSource.STRAVA, externalUserId);
+            String accessToken = validAccessToken(token);
             Long athleteStravaId = parseAthleteId(externalUserId);
 
             Instant startOfYear = LocalDate.now(ZoneOffset.UTC)
@@ -70,7 +70,7 @@ public class SyncActivityDetailJob extends AbstractStravaJob {
                             athleteStravaId, startOfYear, BATCH_SIZE);
 
             if (pendingStravaIds.isEmpty()) {
-                LOG.infof("SyncActivityDetailJob: no hay actividades pendientes para '%s'", externalUserId);
+                LOG.infof("SyncActivityDetailJob: no activities are pending for '%s'", externalUserId);
                 return;
             }
 
@@ -90,26 +90,26 @@ public class SyncActivityDetailJob extends AbstractStravaJob {
                 } catch (WebApplicationException e) {
                     if (e.getResponse().getStatus() == HTTP_TOO_MANY_REQUESTS) {
                         metrics.incrementRateLimitHits();
-                        LOG.warnf("Rate limit de Strava alcanzado tras %d actividades — abortando batch", enriched);
+                        LOG.warnf("Strava rate limit reached after %d activities — aborting batch", enriched);
                         break;
                     }
                     metrics.incrementActivitiesFailed();
-                    LOG.warnf("No se pudo enriquecer actividad stravaId=%d: %s",
+                    LOG.warnf("Could not enrich activity stravaId=%d: %s",
                             stravaId, e.getMessage());
                 } catch (Exception e) {
                     metrics.incrementActivitiesFailed();
-                    LOG.warnf("No se pudo enriquecer actividad stravaId=%d: %s",
+                    LOG.warnf("Could not enrich activity stravaId=%d: %s",
                             stravaId, e.getMessage());
                 } finally {
                     metrics.stopActivityDetailTimer(sample);
                 }
             }
 
-            LOG.infof("SyncActivityDetailJob completado — usuario: '%s', enriquecidas: %d/%d",
+            LOG.infof("SyncActivityDetailJob completed — user: '%s', enriched: %d/%d",
                     externalUserId, enriched, pendingStravaIds.size());
 
         } catch (Exception e) {
-            LOG.errorf(e, "Error en SyncActivityDetailJob para usuario '%s'", externalUserId);
+            LOG.errorf(e, "Error in SyncActivityDetailJob for user '%s'", externalUserId);
             throw e;
         }
     }

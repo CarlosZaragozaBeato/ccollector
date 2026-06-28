@@ -1,0 +1,267 @@
+databaseChangeLog:
+  - changeSet:
+      id: 033-backfill-strava-canonical-data
+      author: zensyra
+      comment: >
+        Backfills canonical identities, accounts, sessions, activity references, and token links
+        from existing Strava data. UUIDs are deterministic and require no PostgreSQL extension.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              WITH known_strava_users AS (
+                SELECT
+                  strava_id::VARCHAR(255) AS external_user_id,
+                  created_at,
+                  updated_at
+                FROM athletes
+
+                UNION ALL
+
+                SELECT
+                  external_user_id,
+                  created_at,
+                  updated_at
+                FROM oauth_tokens
+                WHERE source = 'STRAVA'
+              ),
+              canonical_strava_users AS (
+                SELECT
+                  external_user_id,
+                  MIN(created_at) AS created_at,
+                  MAX(updated_at) AS updated_at
+                FROM known_strava_users
+                GROUP BY external_user_id
+              )
+              INSERT INTO athlete_profiles (id, created_at, updated_at)
+              SELECT
+                (
+                  substr(md5('athlete-profile:STRAVA:' || external_user_id), 1, 8) || '-' ||
+                  substr(md5('athlete-profile:STRAVA:' || external_user_id), 9, 4) || '-' ||
+                  substr(md5('athlete-profile:STRAVA:' || external_user_id), 13, 4) || '-' ||
+                  substr(md5('athlete-profile:STRAVA:' || external_user_id), 17, 4) || '-' ||
+                  substr(md5('athlete-profile:STRAVA:' || external_user_id), 21, 12)
+                )::UUID,
+                created_at,
+                updated_at
+              FROM canonical_strava_users
+              ON CONFLICT (id) DO NOTHING;
+
+              WITH known_strava_users AS (
+                SELECT
+                  strava_id::VARCHAR(255) AS external_user_id,
+                  created_at,
+                  updated_at
+                FROM athletes
+
+                UNION ALL
+
+                SELECT
+                  external_user_id,
+                  created_at,
+                  updated_at
+                FROM oauth_tokens
+                WHERE source = 'STRAVA'
+              ),
+              canonical_strava_users AS (
+                SELECT
+                  external_user_id,
+                  MIN(created_at) AS created_at,
+                  MAX(updated_at) AS updated_at
+                FROM known_strava_users
+                GROUP BY external_user_id
+              )
+              INSERT INTO integration_accounts (
+                id,
+                athlete_id,
+                source,
+                external_user_id,
+                connection_status,
+                created_at,
+                updated_at
+              )
+              SELECT
+                (
+                  substr(md5('integration-account:STRAVA:' || external_user_id), 1, 8) || '-' ||
+                  substr(md5('integration-account:STRAVA:' || external_user_id), 9, 4) || '-' ||
+                  substr(md5('integration-account:STRAVA:' || external_user_id), 13, 4) || '-' ||
+                  substr(md5('integration-account:STRAVA:' || external_user_id), 17, 4) || '-' ||
+                  substr(md5('integration-account:STRAVA:' || external_user_id), 21, 12)
+                )::UUID,
+                (
+                  substr(md5('athlete-profile:STRAVA:' || external_user_id), 1, 8) || '-' ||
+                  substr(md5('athlete-profile:STRAVA:' || external_user_id), 9, 4) || '-' ||
+                  substr(md5('athlete-profile:STRAVA:' || external_user_id), 13, 4) || '-' ||
+                  substr(md5('athlete-profile:STRAVA:' || external_user_id), 17, 4) || '-' ||
+                  substr(md5('athlete-profile:STRAVA:' || external_user_id), 21, 12)
+                )::UUID,
+                'STRAVA',
+                external_user_id,
+                'ACTIVE',
+                created_at,
+                updated_at
+              FROM canonical_strava_users
+              ON CONFLICT (source, external_user_id) DO NOTHING;
+
+              INSERT INTO training_sessions (id, athlete_id, created_at, updated_at)
+              SELECT
+                (
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 1, 8) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 9, 4) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 13, 4) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 17, 4) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 21, 12)
+                )::UUID,
+                ia.athlete_id, a.created_at, a.updated_at
+              FROM activities a
+              JOIN integration_accounts ia
+                ON ia.source = 'STRAVA'
+               AND ia.external_user_id = a.athlete_id::VARCHAR(255)
+              ON CONFLICT (id) DO NOTHING;
+
+              INSERT INTO activity_references (
+                id,
+                athlete_id,
+                training_session_id,
+                integration_account_id,
+                external_activity_id,
+                created_at,
+                updated_at
+              )
+              SELECT
+                (
+                  substr(
+                    md5(
+                      'activity-reference:STRAVA:' ||
+                      a.athlete_id::VARCHAR || ':' ||
+                      a.strava_id::VARCHAR
+                    ),
+                    1,
+                    8
+                  ) || '-' ||
+                  substr(
+                    md5(
+                      'activity-reference:STRAVA:' ||
+                      a.athlete_id::VARCHAR || ':' ||
+                      a.strava_id::VARCHAR
+                    ),
+                    9,
+                    4
+                  ) || '-' ||
+                  substr(
+                    md5(
+                      'activity-reference:STRAVA:' ||
+                      a.athlete_id::VARCHAR || ':' ||
+                      a.strava_id::VARCHAR
+                    ),
+                    13,
+                    4
+                  ) || '-' ||
+                  substr(
+                    md5(
+                      'activity-reference:STRAVA:' ||
+                      a.athlete_id::VARCHAR || ':' ||
+                      a.strava_id::VARCHAR
+                    ),
+                    17,
+                    4
+                  ) || '-' ||
+                  substr(
+                    md5(
+                      'activity-reference:STRAVA:' ||
+                      a.athlete_id::VARCHAR || ':' ||
+                      a.strava_id::VARCHAR
+                    ),
+                    21,
+                    12
+                  )
+                )::UUID,
+                ia.athlete_id,
+                (
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 1, 8) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 9, 4) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 13, 4) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 17, 4) || '-' ||
+                  substr(md5('training-session:STRAVA:' || a.strava_id::VARCHAR), 21, 12)
+                )::UUID,
+                ia.id,
+                a.strava_id::VARCHAR(255),
+                a.created_at,
+                a.updated_at
+              FROM activities a
+              JOIN integration_accounts ia
+                ON ia.source = 'STRAVA'
+               AND ia.external_user_id = a.athlete_id::VARCHAR(255)
+              ON CONFLICT (integration_account_id, external_activity_id) DO NOTHING;
+
+              UPDATE oauth_tokens t
+              SET integration_account_id = ia.id
+              FROM integration_accounts ia
+              WHERE t.source = 'STRAVA'
+                AND ia.source = t.source
+                AND ia.external_user_id = t.external_user_id
+                AND t.integration_account_id IS DISTINCT FROM ia.id;
+
+              DO $$
+              DECLARE
+                unlinked_token_count BIGINT;
+                missing_activity_reference_count BIGINT;
+                duplicate_account_count BIGINT;
+                duplicate_activity_reference_count BIGINT;
+              BEGIN
+                SELECT COUNT(*)
+                INTO unlinked_token_count
+                FROM oauth_tokens t
+                LEFT JOIN integration_accounts ia
+                  ON ia.id = t.integration_account_id
+                WHERE ia.id IS NULL;
+
+                SELECT COUNT(*)
+                INTO missing_activity_reference_count
+                FROM activities a
+                LEFT JOIN integration_accounts ia
+                  ON ia.source = 'STRAVA'
+                 AND ia.external_user_id = a.athlete_id::VARCHAR(255)
+                LEFT JOIN activity_references ar
+                  ON ar.integration_account_id = ia.id
+                 AND ar.external_activity_id = a.strava_id::VARCHAR(255)
+                WHERE ar.id IS NULL;
+
+                SELECT COUNT(*)
+                INTO duplicate_account_count
+                FROM (
+                  SELECT source, external_user_id
+                  FROM integration_accounts
+                  GROUP BY source, external_user_id
+                  HAVING COUNT(*) > 1
+                ) duplicate_accounts;
+
+                SELECT COUNT(*)
+                INTO duplicate_activity_reference_count
+                FROM (
+                  SELECT integration_account_id, external_activity_id
+                  FROM activity_references
+                  GROUP BY integration_account_id, external_activity_id
+                  HAVING COUNT(*) > 1
+                ) duplicate_activity_references;
+
+                IF unlinked_token_count <> 0 THEN
+                  RAISE EXCEPTION 'Canonical Strava backfill left % OAuth tokens without an integration account',
+                    unlinked_token_count;
+                END IF;
+
+                IF missing_activity_reference_count <> 0 THEN
+                  RAISE EXCEPTION 'Canonical Strava backfill left % activities without an activity reference',
+                    missing_activity_reference_count;
+                END IF;
+
+                IF duplicate_account_count <> 0 THEN
+                  RAISE EXCEPTION 'Canonical Strava backfill created % duplicate integration account keys',
+                    duplicate_account_count;
+                END IF;
+
+                IF duplicate_activity_reference_count <> 0 THEN
+                  RAISE EXCEPTION 'Canonical Strava backfill created % duplicate activity reference keys',
+                    duplicate_activity_reference_count;
+                END IF;
+              END $$;

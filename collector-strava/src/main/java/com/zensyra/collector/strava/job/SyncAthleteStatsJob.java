@@ -1,7 +1,6 @@
 package com.zensyra.collector.strava.job;
 
 import com.zensyra.collector.core.oauth.OAuthToken;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.api.dto.StravaAthleteStatsDto;
 import com.zensyra.collector.strava.athletestats.AthleteStatsSnapshotService;
@@ -32,17 +31,17 @@ public class SyncAthleteStatsJob extends AbstractStravaJob {
 
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
-        String externalUserId = token.getExternalUserId();
+        String externalUserId = externalUserId(token);
         try {
             Long athleteId = parseAthleteId(externalUserId);
-            String accessToken = tokenService.getValidToken(IntegrationSource.STRAVA, externalUserId);
+            String accessToken = validAccessToken(token);
             StravaAthleteStatsDto dto = stravaApiClient.getAthleteStats("Bearer " + accessToken, athleteId);
             LocalDate snapshotDate = context.triggeredAt().atZone(ZoneOffset.UTC).toLocalDate();
 
             athleteStatsSnapshotService.upsertDailySnapshot(athleteId, snapshotDate, dto);
-            LOG.infof("SyncAthleteStatsJob completado — usuario: '%s', snapshotDate=%s", externalUserId, snapshotDate);
+            LOG.infof("SyncAthleteStatsJob completed — user: '%s', snapshotDate=%s", externalUserId, snapshotDate);
         } catch (Exception e) {
-            LOG.errorf(e, "Error sincronizando athlete stats para usuario '%s'", externalUserId);
+            LOG.errorf(e, "Error synchronizing athlete stats for user '%s'", externalUserId);
             throw e;
         }
         return false;

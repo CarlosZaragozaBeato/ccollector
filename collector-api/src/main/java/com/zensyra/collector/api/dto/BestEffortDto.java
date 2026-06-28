@@ -1,23 +1,25 @@
 package com.zensyra.collector.api.dto;
 
-import com.zensyra.collector.strava.besteffort.ActivityBestEffort;
+import com.zensyra.collector.query.model.BestEffort;
+import io.quarkus.runtime.annotations.RegisterForReflection;
 
+import java.util.UUID;
+
+@RegisterForReflection
 public record BestEffortDto(
-        Long activityStravaId,
+        UUID activityId,
         String name,
         Integer distance,
         Integer elapsedTime,
-        Boolean isKom,
         Integer prRank
 ) {
-    public static BestEffortDto from(ActivityBestEffort effort) {
+    public static BestEffortDto from(BestEffort effort) {
         return new BestEffortDto(
-                effort.getActivityStravaId(),
-                effort.getName(),
-                effort.getDistance(),
-                effort.getElapsedTime(),
-                effort.getIsKom(),
-                effort.getPrRank()
+                effort.activityId(),
+                effort.name(),
+                effort.distanceMeters(),
+                effort.elapsedTimeSecs(),
+                effort.personalRecordRank()
         );
     }
 }
