@@ -121,6 +121,12 @@ Key decisions are recorded in [`docs/adr/`](docs/adr/).
 |-----|-------|--------|
 | [ADR-001](docs/adr/001-collector-api-scope.md) | `collector-api` Scope as a Multi-Integration API | Accepted |
 
+## Design Documents
+
+| Doc | Title | Status |
+|-----|-------|--------|
+| [Design-001](docs/design/001-activity-read-models.md) | Neutral Read-Models for `collector-api` | Accepted and implemented |
+
 ## Known Gaps
 
 - No Suunto, COROS, Garmin, or TrainingPeaks integration yet.
