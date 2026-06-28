@@ -113,6 +113,14 @@ mise exec -- ./mvnw clean package -DskipTests
 ENV_FILE=.env.local just dev
 ```
 
+## Architecture Decision Records
+
+Key decisions are recorded in [`docs/adr/`](docs/adr/).
+
+| ADR | Title | Status |
+|-----|-------|--------|
+| [ADR-001](docs/adr/001-collector-api-scope.md) | `collector-api` Scope as a Multi-Integration API | Accepted |
+
 ## Known Gaps
 
 - No Suunto, COROS, Garmin, or TrainingPeaks integration yet.
