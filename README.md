@@ -85,31 +85,29 @@ Prerequisites:
 - Maven wrapper from this repo.
 - PostgreSQL with TimescaleDB available locally.
 - A database/schema reachable through `DB_JDBC_URL`, usually with `currentSchema=collector`.
-- Strava API credentials if you want to register real athletes and sync real data.
+- A Strava API application (see [Connect Your Strava Account](#connect-your-strava-account) below).
 
-Create a local environment file such as `.env.local`:
+### Environment variables
 
-```dotenv
-DB_USERNAME=zensyra_user
-DB_PASSWORD=change-me
-DB_JDBC_URL=jdbc:postgresql://localhost:5432/zensyra?currentSchema=collector
-HTTP_PORT=8090
-QUARKUS_LOG_LEVEL=INFO
-ZENSYRA_LOG_LEVEL=DEBUG
-COLLECTOR_API_KEY=dev-api-key
-ADMIN_TOKEN=dev-admin-token
-COLLECTOR_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
-STRAVA_CLIENT_ID=<strava-client-id>
-STRAVA_CLIENT_SECRET=<strava-client-secret>
-QUARTZ_STORE_TYPE=ram
-QUARTZ_CLUSTERED=false
-```
-
-Generate an encryption key:
+Copy `.env.example` to `.env.local` and fill in the required values:
 
 ```bash
-openssl rand -base64 32
+cp .env.example .env.local
 ```
+
+The file is annotated with which variables are required and which have working
+defaults. Never commit `.env.local` — it is in `.gitignore`.
+
+Required variables:
+
+| Variable | Description |
+|----------|-------------|
+| `DB_USERNAME` | PostgreSQL user |
+| `DB_PASSWORD` | PostgreSQL password |
+| `DB_JDBC_URL` | JDBC URL, e.g. `jdbc:postgresql://localhost:5432/zensyra?currentSchema=collector` |
+| `COLLECTOR_ENCRYPTION_KEY` | AES-256-GCM key (32 bytes, base64). Generate: `openssl rand -base64 32` |
+| `COLLECTOR_API_KEY` | Secret for the read API (`X-API-Key` header on `/api/v1` routes) |
+| `ADMIN_TOKEN` | Secret for admin routes (`X-Admin-Token` header on `/admin` routes) |
 
 Run tests:
 
@@ -133,15 +131,156 @@ ENV_FILE=.env.local just dev
 Check health:
 
 ```bash
-curl -i http://localhost:8090/q/health/live
-curl -i http://localhost:8090/q/health/ready
+curl -i http://localhost:8080/q/health/live
+curl -i http://localhost:8080/q/health/ready
 ```
 
-First real run:
+---
 
-1. Insert a `STRAVA` row into `integration_credentials` or provide it through whatever bootstrap process you use.
-2. Complete Strava OAuth in a client and send the authorization code to `POST /api/v1/athletes/register`.
-3. Trigger jobs manually through `/admin/trigger/{jobId}` with `X-Admin-Token`, or wait for the Quartz schedule.
+## Connect Your Strava Account
+
+Follow these steps from a clean install. You need a running app instance and a
+Strava API application before registering an athlete.
+
+### Step 1 — Create a Strava API application
+
+1. Log in at [strava.com](https://www.strava.com) with the account you want to use as the API owner (this does not have to be the athlete account you will sync).
+2. Go to **Settings → My API Application**: [strava.com/settings/api](https://www.strava.com/settings/api).
+3. Fill in the form:
+   - **Application name**: anything, e.g. `CCollector Dev`.
+   - **Category**: choose the closest option, e.g. `Training Analysis`.
+   - **Club**: leave empty.
+   - **Website**: any valid URL, e.g. `http://localhost`.
+   - **Authorization Callback Domain**: for local development use `localhost`. For a deployed instance use your domain, e.g. `collector.yourdomain.com`.
+4. Click **Create** (or **Update** if the app already exists).
+5. Note the **Client ID** (a number) and the **Client Secret** (a long hex string) shown on the page. You will need both in Step 3.
+
+### Step 2 — Start the application
+
+Ensure your `.env.local` is complete and start the app:
+
+```bash
+ENV_FILE=.env.local just dev
+# or:
+set -a && source .env.local && set +a
+mise exec -- ./mvnw quarkus:dev -pl collector-runner -am
+```
+
+Wait until the health endpoint returns `UP`:
+
+```bash
+curl -s http://localhost:8080/q/health/ready | jq .status
+```
+
+### Step 3 — Seed the Strava credentials into the database
+
+The Client ID and Secret are stored in the `integration_credentials` table,
+encrypted at rest with `COLLECTOR_ENCRYPTION_KEY`. Insert them via psql:
+
+```sql
+-- Connect to your database first, then:
+INSERT INTO integration_credentials (source, client_id, client_secret)
+VALUES ('STRAVA', '<your-client-id>', '<your-client-secret>');
+```
+
+> The `client_secret` column is encrypted by the application layer using
+> AES-256-GCM. The plain-text value you insert here is encrypted on the
+> first write and is never stored in clear text.
+
+Verify the row was created:
+
+```sql
+SELECT id, source, client_id FROM integration_credentials WHERE source = 'STRAVA';
+```
+
+### Step 4 — Authorize the athlete account
+
+Build the Strava authorization URL and open it in a browser. Replace
+`<client-id>` with your numeric Client ID and `<redirect-uri>` with a URI
+that Strava will redirect back to after the athlete approves access (it must
+match the callback domain you configured in Step 1):
+
+```
+https://www.strava.com/oauth/authorize
+  ?client_id=<client-id>
+  &redirect_uri=<redirect-uri>
+  &response_type=code
+  &approval_prompt=auto
+  &scope=read,activity:read_all,profile:read_all
+```
+
+Example for local development (redirect to localhost, code will be in the
+browser address bar — no server needs to be listening on that URI for this
+step):
+
+```
+https://www.strava.com/oauth/authorize?client_id=12345&redirect_uri=http://localhost/callback&response_type=code&approval_prompt=auto&scope=read,activity:read_all,profile:read_all
+```
+
+After the athlete clicks **Authorize**, Strava redirects to your callback URI
+with a `code` query parameter:
+
+```
+http://localhost/callback?state=&code=abc123xyz&scope=read,activity:read_all,profile:read_all
+```
+
+Copy the value of `code` from the address bar.
+
+### Step 5 — Register the athlete
+
+Call the register endpoint with the code and the same redirect URI you used in
+Step 4:
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/athletes/register \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <COLLECTOR_API_KEY>" \
+  -d '{
+    "code": "<paste-code-here>",
+    "redirectUri": "<redirect-uri>"
+  }' | jq .
+```
+
+A successful response looks like:
+
+```json
+{
+  "athleteId": "a1b2c3d4-...",
+  "created": true,
+  "expiresAt": "2026-07-01T12:00:00Z"
+}
+```
+
+The athlete's OAuth tokens are now stored, encrypted, in the `oauth_tokens`
+table. The app will refresh them automatically before they expire.
+
+### Step 6 — Trigger the initial sync
+
+Jobs run on the Quartz schedule automatically, but you can also trigger them
+immediately through the admin endpoint:
+
+```bash
+# List available jobs
+curl -s http://localhost:8080/admin/jobs \
+  -H "X-Admin-Token: <ADMIN_TOKEN>" | jq .
+
+# Trigger the initial historical sync
+curl -s -X POST http://localhost:8080/admin/trigger/strava.initial-historical-sync \
+  -H "X-Admin-Token: <ADMIN_TOKEN>"
+
+# Or trigger a standard activity sync
+curl -s -X POST http://localhost:8080/admin/trigger/strava.sync-activities \
+  -H "X-Admin-Token: <ADMIN_TOKEN>"
+```
+
+After the sync completes, query your activities:
+
+```bash
+curl -s "http://localhost:8080/api/v1/athletes/<athleteId>/activities?size=5" \
+  -H "X-API-Key: <COLLECTOR_API_KEY>" | jq .
+```
+
+---
 
 What it does not do yet:
 
