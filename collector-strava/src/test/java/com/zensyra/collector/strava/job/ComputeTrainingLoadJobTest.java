@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
@@ -33,8 +34,10 @@ class ComputeTrainingLoadJobTest {
     @Inject
     ComputeTrainingLoadJob job;
 
+    // --- full success ---
+
     @Test
-    void shouldComputeForEachAthleteToken() {
+    void allAthletesSucceed_jobCompletesNormally() {
         stubToken("12345");
         SyncContext context = buildContext();
 
@@ -54,8 +57,10 @@ class ComputeTrainingLoadJobTest {
         verify(trainingLoadService, never()).computeAndUpsert(anyLong(), any());
     }
 
+    // --- partial failure (some athletes fail, some succeed) ---
+
     @Test
-    void shouldContinueRemainingAthletesWhenOneFails() {
+    void partialFailure_remainingAthletesStillRun_jobCompletesNormally() {
         OAuthToken t1 = makeToken("111");
         OAuthToken t2 = makeToken("222");
         when(tokenRepository.findAllBySource(IntegrationSource.STRAVA))
@@ -64,10 +69,34 @@ class ComputeTrainingLoadJobTest {
         LocalDate date = Instant.now().atZone(ZoneOffset.UTC).toLocalDate();
         doThrow(new RuntimeException("DB error")).when(trainingLoadService).computeAndUpsert(111L, date);
 
+        // Partial failure: job must not throw (some work was done) but must not
+        // silently swallow 111's error (covered by the verify below).
         assertDoesNotThrow(() -> job.execute(buildContext()));
 
         verify(trainingLoadService).computeAndUpsert(222L, date);
     }
+
+    // --- total failure (all athletes fail) ---
+
+    // RED before fix: the job swallowed all exceptions and returned normally,
+    // so SyncJobExecutor called markSuccess() — incorrectly reporting SUCCESS.
+    // GREEN after fix: the job propagates a RuntimeException, so
+    // SyncJobExecutor calls markFailure() — correctly reporting FAILED.
+    @Test
+    void allAthletesFail_jobThrows() {
+        OAuthToken t1 = makeToken("111");
+        OAuthToken t2 = makeToken("222");
+        when(tokenRepository.findAllBySource(IntegrationSource.STRAVA))
+                .thenReturn(List.of(t1, t2));
+
+        LocalDate date = Instant.now().atZone(ZoneOffset.UTC).toLocalDate();
+        doThrow(new RuntimeException("DB error")).when(trainingLoadService).computeAndUpsert(111L, date);
+        doThrow(new RuntimeException("DB error")).when(trainingLoadService).computeAndUpsert(222L, date);
+
+        assertThrows(RuntimeException.class, () -> job.execute(buildContext()));
+    }
+
+    // --- helpers ---
 
     private void stubToken(String externalUserId) {
         when(tokenRepository.findAllBySource(IntegrationSource.STRAVA))

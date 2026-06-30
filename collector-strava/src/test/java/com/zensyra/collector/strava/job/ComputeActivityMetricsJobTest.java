@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
@@ -35,6 +36,8 @@ class ComputeActivityMetricsJobTest {
 
     @Inject
     ComputeActivityMetricsJob job;
+
+    // --- full success ---
 
     @Test
     void shouldComputeForEachAthleteToken() {
@@ -74,8 +77,10 @@ class ComputeActivityMetricsJobTest {
         verify(activityMetricsService, never()).computeAndUpsert(anyLong());
     }
 
+    // --- partial failure (some athletes fail, some succeed) ---
+
     @Test
-    void shouldContinueRemainingAthletesWhenOneFails() {
+    void partialFailure_remainingAthletesStillRun_jobCompletesNormally() {
         OAuthToken t1 = makeToken("111");
         OAuthToken t2 = makeToken("222");
         when(tokenRepository.findAllBySource(IntegrationSource.STRAVA))
@@ -86,6 +91,23 @@ class ComputeActivityMetricsJobTest {
         assertDoesNotThrow(() -> job.execute(buildContext()));
 
         verify(activityMetricsService).computeAndUpsert(222L);
+    }
+
+    // --- total failure (all athletes fail) ---
+
+    // RED before fix: job swallowed all exceptions → SyncJobExecutor.markSuccess() (wrong).
+    // GREEN after fix: job throws → SyncJobExecutor.markFailure() (correct).
+    @Test
+    void allAthletesFail_jobThrows() {
+        OAuthToken t1 = makeToken("111");
+        OAuthToken t2 = makeToken("222");
+        when(tokenRepository.findAllBySource(IntegrationSource.STRAVA))
+                .thenReturn(List.of(t1, t2));
+
+        doThrow(new RuntimeException("DB error")).when(activityMetricsService).computeAndUpsert(111L);
+        doThrow(new RuntimeException("DB error")).when(activityMetricsService).computeAndUpsert(222L);
+
+        assertThrows(RuntimeException.class, () -> job.execute(buildContext()));
     }
 
     private void stubToken(String externalUserId) {

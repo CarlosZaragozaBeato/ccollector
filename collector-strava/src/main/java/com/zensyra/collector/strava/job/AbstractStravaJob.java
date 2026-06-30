@@ -45,10 +45,33 @@ public abstract class AbstractStravaJob implements SyncJob {
             LOG.infof("%s: no Strava tokens found — skipping execution", getClass().getSimpleName());
             return;
         }
+
+        int successes = 0;
+        int failures = 0;
+
         for (OAuthToken token : tokens) {
-            if (executeForToken(token, context)) {
-                break;
+            try {
+                if (executeForToken(token, context)) {
+                    break; // rate-limit or early-abort signal — not counted as success or failure
+                }
+                successes++;
+            } catch (Exception e) {
+                // Jobs that log-and-rethrow (e.g. SyncAthleteJob) will produce a second log
+                // line here. That is acceptable; the fix for those jobs is a separate cleanup.
+                LOG.errorf(e, "%s: error processing athlete '%s'",
+                        getClass().getSimpleName(), token.getExternalUserId());
+                failures++;
             }
+        }
+
+        if (failures > 0 && successes == 0) {
+            throw new RuntimeException(
+                    getClass().getSimpleName() + ": all " + failures
+                            + " athlete(s) failed; see preceding error logs");
+        }
+        if (failures > 0) {
+            LOG.warnf("%s: partial failure — %d athlete(s) succeeded, %d failed",
+                    getClass().getSimpleName(), successes, failures);
         }
     }
 
