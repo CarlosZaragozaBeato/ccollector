@@ -14,6 +14,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.openapi.annotations.Operation;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -30,6 +31,15 @@ public class TrainingLoadSummaryResource {
     Instance<TrainingLoadSummaryQueryPort> trainingLoadSummaryQueryPorts;
 
     @GET
+    @Operation(
+            summary = "Weekly/monthly training load summary",
+            description = "Returns accumulated TSS and end-of-period CTL/ATL/TSB snapshots per calendar period. "
+                    + "**TSS approximation**: values are estimated as "
+                    + "`(moving_time_seconds / 3600) × IF² × 100` with a fixed intensity factor "
+                    + "IF = 0.75 (no power meter required). Real power-based TSS will replace this "
+                    + "once athlete FTP is wired in (tracked separately). "
+                    + "`ctlEnd`, `atlEnd`, `tsbEnd` are the CTL/ATL/TSB recorded on the last day with data "
+                    + "in the period; null when the period has no training rows.")
     public Response list(
             @PathParam("athleteId") UUID athleteId,
             @QueryParam("granularity") @DefaultValue("weekly") String granularityParam,
