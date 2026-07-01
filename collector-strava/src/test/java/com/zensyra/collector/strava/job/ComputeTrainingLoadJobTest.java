@@ -3,6 +3,7 @@ package com.zensyra.collector.strava.job;
 import com.zensyra.collector.core.oauth.OAuthToken;
 import com.zensyra.collector.core.oauth.OAuthTokenRepository;
 import com.zensyra.collector.core.sync.IntegrationSource;
+import com.zensyra.collector.core.sync.PartialJobFailureException;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.trainingload.TrainingLoadService;
 import io.quarkus.test.InjectMock;
@@ -60,7 +61,7 @@ class ComputeTrainingLoadJobTest {
     // --- partial failure (some athletes fail, some succeed) ---
 
     @Test
-    void partialFailure_remainingAthletesStillRun_jobCompletesNormally() {
+    void partialFailure_remainingAthletesStillRun_throwsPartialException() {
         OAuthToken t1 = makeToken("111");
         OAuthToken t2 = makeToken("222");
         when(tokenRepository.findAllBySource(IntegrationSource.STRAVA))
@@ -69,10 +70,8 @@ class ComputeTrainingLoadJobTest {
         LocalDate date = Instant.now().atZone(ZoneOffset.UTC).toLocalDate();
         doThrow(new RuntimeException("DB error")).when(trainingLoadService).computeAndUpsert(111L, date);
 
-        // Partial failure: job must not throw (some work was done) but must not
-        // silently swallow 111's error (covered by the verify below).
-        assertDoesNotThrow(() -> job.execute(buildContext()));
-
+        // All tokens must be attempted even when one fails.
+        assertThrows(PartialJobFailureException.class, () -> job.execute(buildContext()));
         verify(trainingLoadService).computeAndUpsert(222L, date);
     }
 

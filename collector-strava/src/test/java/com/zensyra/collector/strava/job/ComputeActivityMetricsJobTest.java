@@ -5,6 +5,7 @@ import com.zensyra.collector.core.identity.IntegrationAccountRepository;
 import com.zensyra.collector.core.oauth.OAuthToken;
 import com.zensyra.collector.core.oauth.OAuthTokenRepository;
 import com.zensyra.collector.core.sync.IntegrationSource;
+import com.zensyra.collector.core.sync.PartialJobFailureException;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.activitymetrics.ActivityMetricsService;
 import io.quarkus.test.InjectMock;
@@ -80,7 +81,7 @@ class ComputeActivityMetricsJobTest {
     // --- partial failure (some athletes fail, some succeed) ---
 
     @Test
-    void partialFailure_remainingAthletesStillRun_jobCompletesNormally() {
+    void partialFailure_remainingAthletesStillRun_throwsPartialException() {
         OAuthToken t1 = makeToken("111");
         OAuthToken t2 = makeToken("222");
         when(tokenRepository.findAllBySource(IntegrationSource.STRAVA))
@@ -88,8 +89,8 @@ class ComputeActivityMetricsJobTest {
 
         doThrow(new RuntimeException("DB error")).when(activityMetricsService).computeAndUpsert(111L);
 
-        assertDoesNotThrow(() -> job.execute(buildContext()));
-
+        // All tokens must be attempted even when one fails.
+        assertThrows(PartialJobFailureException.class, () -> job.execute(buildContext()));
         verify(activityMetricsService).computeAndUpsert(222L);
     }
 
@@ -109,6 +110,8 @@ class ComputeActivityMetricsJobTest {
 
         assertThrows(RuntimeException.class, () -> job.execute(buildContext()));
     }
+
+    // --- helpers ---
 
     private void stubToken(String externalUserId) {
         when(tokenRepository.findAllBySource(IntegrationSource.STRAVA))

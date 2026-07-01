@@ -6,6 +6,7 @@ import com.zensyra.collector.core.oauth.OAuthToken;
 import com.zensyra.collector.core.oauth.OAuthTokenRepository;
 import com.zensyra.collector.core.oauth.OAuthTokenService;
 import com.zensyra.collector.core.sync.IntegrationSource;
+import com.zensyra.collector.core.sync.PartialJobFailureException;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.core.sync.SyncJob;
 import com.zensyra.collector.strava.api.StravaApiClient;
@@ -70,8 +71,7 @@ public abstract class AbstractStravaJob implements SyncJob {
                             + " athlete(s) failed; see preceding error logs");
         }
         if (failures > 0) {
-            LOG.warnf("%s: partial failure — %d athlete(s) succeeded, %d failed",
-                    getClass().getSimpleName(), successes, failures);
+            throw new PartialJobFailureException(getClass().getSimpleName(), successes, failures);
         }
     }
 
