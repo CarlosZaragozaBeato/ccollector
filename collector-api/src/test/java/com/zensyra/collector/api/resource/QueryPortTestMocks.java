@@ -1,8 +1,10 @@
 package com.zensyra.collector.api.resource;
 
 import com.zensyra.collector.query.port.ActivityMetricsQueryPort;
+import com.zensyra.collector.query.port.ActivitySummaryQueryPort;
 import com.zensyra.collector.query.port.AthleteStatsQueryPort;
 import com.zensyra.collector.query.port.BestEffortQueryPort;
+import com.zensyra.collector.query.port.LapQueryPort;
 import com.zensyra.collector.query.port.TrainingLoadQueryPort;
 import io.quarkus.test.Mock;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -50,5 +52,17 @@ public class QueryPortTestMocks {
     @ApplicationScoped
     TrainingLoadQueryPort trainingLoadQueryPort() {
         return mock(TrainingLoadQueryPort.class);
+    }
+
+    @Mock
+    @ApplicationScoped
+    ActivitySummaryQueryPort activitySummaryQueryPort() {
+        return mock(ActivitySummaryQueryPort.class);
+    }
+
+    @Mock
+    @ApplicationScoped
+    LapQueryPort lapQueryPort() {
+        return mock(LapQueryPort.class);
     }
 }
