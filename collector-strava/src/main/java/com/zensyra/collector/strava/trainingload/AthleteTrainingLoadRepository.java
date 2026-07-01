@@ -17,4 +17,8 @@ public class AthleteTrainingLoadRepository implements PanacheRepositoryBase<Athl
     public List<AthleteTrainingLoad> findRecentByAthleteId(Long athleteId, LocalDate from) {
         return list("athleteId = ?1 and date >= ?2 order by date asc", athleteId, from);
     }
+
+    public List<AthleteTrainingLoad> findByAthleteIdAndDateRange(Long athleteId, LocalDate from, LocalDate to) {
+        return list("athleteId = ?1 and date >= ?2 and date <= ?3 order by date asc", athleteId, from, to);
+    }
 }
