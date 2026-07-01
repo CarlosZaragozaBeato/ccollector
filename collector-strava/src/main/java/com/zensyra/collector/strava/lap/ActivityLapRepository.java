@@ -12,6 +12,10 @@ public class ActivityLapRepository implements PanacheRepositoryBase<ActivityLap,
         return list("activityStravaId", activityStravaId);
     }
 
+    public List<ActivityLap> findByActivityStravaIdOrderByLapIndex(Long activityStravaId) {
+        return list("activityStravaId = ?1 order by lapIndex asc", activityStravaId);
+    }
+
     public long deleteByActivityStravaId(Long activityStravaId) {
         return delete("activityStravaId", activityStravaId);
     }
