@@ -63,7 +63,11 @@ sesion_message.xml
 .DS_Store
 Thumbs.db
 
-# Frontend/package-manager artifacts if added later
+# Frontend / dashboard
 node_modules/
 dist/
 coverage/
+# Node binary downloaded by frontend-maven-plugin (not source)
+collector-dashboard/node/
+# Per-user config with athleteId and API key — copy from config.json.example
+collector-dashboard/public/config.json

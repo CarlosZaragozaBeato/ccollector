@@ -28,6 +28,7 @@ Modules:
 - `collector-core`: shared infrastructure for integration credentials, encrypted OAuth tokens, sync job records, health checks, and rate limiting primitives.
 - `collector-strava`: Strava REST client, transport DTOs, entities, repositories, upsert services, scheduled sync jobs, stream mapping, and derived metric computation.
 - `collector-api`: REST read layer and athlete registration endpoint. Routes under `/api/v1` require `X-API-Key`.
+- `collector-dashboard`: React/Vite SPA compiled at build time and served as static resources by Quarkus. No runtime Node.js dependency.
 - `collector-runner`: Quarkus application entry point, Quartz job registration, admin/dev trigger endpoints, health checks, metrics, and packaging.
 
 Tech stack:
@@ -134,6 +135,58 @@ Check health:
 curl -i http://localhost:8080/q/health/live
 curl -i http://localhost:8080/q/health/ready
 ```
+
+### Dashboard
+
+The dashboard is a React SPA served at `/dashboard/` by Quarkus.
+
+**1. Configure your athlete ID and API key**
+
+```bash
+cp collector-dashboard/public/config.json.example \
+   collector-dashboard/public/config.json
+```
+
+Edit `collector-dashboard/public/config.json`:
+
+```json
+{
+  "athleteId": "<your-athlete-uuid>",
+  "apiKey":    "<value of COLLECTOR_API_KEY>"
+}
+```
+
+The `athleteId` is the UUID stored in the `athletes` table for your Strava account.
+`config.json` is gitignored — it never leaves your machine.
+
+**2. Build (includes frontend)**
+
+```bash
+./mvnw package -DskipTests
+```
+
+The `frontend-maven-plugin` downloads Node 20, runs `npm ci` and `vite build`, and
+packages the built assets into `collector-dashboard.jar` under `META-INF/resources/dashboard/`.
+Quarkus picks them up automatically.
+
+To skip the frontend build during development iteration:
+
+```bash
+./mvnw package -DskipTests -P skip-frontend
+```
+
+**3. Open the dashboard**
+
+```
+http://localhost:8080/dashboard/
+```
+
+The dashboard has three tabs:
+- **Fitness Trends** — CTL / ATL / TSB over time (last 30 / 60 / 90 days)
+- **Weekly Load** — accumulated TSS per week for the last 12 weeks
+- **Recent Activities** — last 20 activities
+
+**Swagger UI** is available at `http://localhost:8080/q/swagger-ui`.
 
 ---
 
