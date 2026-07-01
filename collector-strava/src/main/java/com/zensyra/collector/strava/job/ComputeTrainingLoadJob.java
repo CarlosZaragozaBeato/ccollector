@@ -32,13 +32,9 @@ public class ComputeTrainingLoadJob extends AbstractStravaJob {
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
         String externalUserId = externalUserId(token);
         LocalDate targetDate = context.triggeredAt().atZone(ZoneOffset.UTC).toLocalDate();
-        try {
-            Long athleteId = parseAthleteId(externalUserId);
-            trainingLoadService.computeAndUpsert(athleteId, targetDate);
-            LOG.infof("ComputeTrainingLoadJob completed — user: '%s', date=%s", externalUserId, targetDate);
-        } catch (Exception e) {
-            LOG.errorf(e, "Error calculating training load for user '%s'", externalUserId);
-        }
+        Long athleteId = parseAthleteId(externalUserId);
+        trainingLoadService.computeAndUpsert(athleteId, targetDate);
+        LOG.infof("ComputeTrainingLoadJob completed — user: '%s', date=%s", externalUserId, targetDate);
         return false;
     }
 }

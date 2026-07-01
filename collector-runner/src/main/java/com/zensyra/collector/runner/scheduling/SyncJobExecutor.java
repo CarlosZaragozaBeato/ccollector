@@ -1,5 +1,6 @@
 package com.zensyra.collector.runner.scheduling;
 
+import com.zensyra.collector.core.sync.PartialJobFailureException;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.core.sync.SyncJob;
 import com.zensyra.collector.core.sync.SyncJobRecord;
@@ -44,6 +45,14 @@ public class SyncJobExecutor {
             syncJob.execute(context);
             markSuccess(record.getId());
             LOG.infof("Job '%s' executed successfully", syncJob.jobId());
+        } catch (PartialJobFailureException partial) {
+            // Some athletes succeeded, some failed. Mark success (work was done,
+            // consecutiveFailures reset) and also record lastFailureAt so that the
+            // partial outcome is visible in SyncJobRecord without triggering alerts
+            // that are reserved for total failure.
+            markSuccess(record.getId());
+            markLastFailureAt(record.getId());
+            LOG.warnf("Job '%s' completed with partial failures: %s", syncJob.jobId(), partial.getMessage());
         } catch (Exception jobException) {
             try {
                 markFailure(record.getId(), record.getConsecutiveFailures() + 1);
@@ -87,5 +96,10 @@ public class SyncJobExecutor {
             r.setLastFailureAt(Instant.now());
             r.setConsecutiveFailures(consecutiveFailures);
         });
+    }
+
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    protected void markLastFailureAt(Long recordId) {
+        recordRepository.findByIdOptional(recordId).ifPresent(r -> r.setLastFailureAt(Instant.now()));
     }
 }

@@ -1,5 +1,6 @@
 package com.zensyra.collector.runner.scheduling;
 
+import com.zensyra.collector.core.sync.PartialJobFailureException;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.core.sync.SyncJob;
 import com.zensyra.collector.core.sync.SyncJobRecord;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -44,7 +46,23 @@ class SyncJobExecutorTest {
                 "consecutiveFailures must be incremented to 1");
     }
 
-    // --- case 2: job throws AND markFailure() also throws → CRITICAL log + original exception propagates ---
+    // --- case 2: PartialJobFailureException → lastSuccessAt AND lastFailureAt both set, consecutiveFailures stays 0 ---
+
+    @Test
+    void partialFailure_setsLastFailureAtWithoutIncrementingConsecutiveFailures() throws Exception {
+        SyncJobRecord record = makeRecord(1L, 0);
+        when(recordRepository.findByJobId("test-job")).thenReturn(Optional.of(record));
+        when(recordRepository.findByIdOptional(1L)).thenReturn(Optional.of(record));
+
+        executor.execute(partiallyFailingJob());
+
+        assertNotNull(record.getLastSuccessAt(), "lastSuccessAt must be set — some athletes succeeded");
+        assertNotNull(record.getLastFailureAt(), "lastFailureAt must be set — some athletes failed");
+        assertEquals(0, record.getConsecutiveFailures(),
+                "consecutiveFailures must stay 0 — partial is not a total failure");
+    }
+
+    // --- case 3: job throws AND markFailure() also throws → CRITICAL log + original exception propagates ---
 
     @Test
     void markFailureThrows_originalExceptionStillPropagates() {
@@ -79,6 +97,16 @@ class SyncJobExecutorTest {
             @Override public String jobId() { return "test-job"; }
             @Override public String cronExpression() { return "0 * * * * ?"; }
             @Override public void execute(SyncContext ctx) { throw toThrow; }
+        };
+    }
+
+    private SyncJob partiallyFailingJob() {
+        return new SyncJob() {
+            @Override public String jobId() { return "test-job"; }
+            @Override public String cronExpression() { return "0 * * * * ?"; }
+            @Override public void execute(SyncContext ctx) {
+                throw new PartialJobFailureException("test-job", 3, 1);
+            }
         };
     }
 }
