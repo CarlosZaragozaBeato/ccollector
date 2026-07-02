@@ -107,6 +107,48 @@ class ActivityMetricsServiceTest {
         verify(f.metrics, org.mockito.Mockito.never()).persist(any(ActivityMetrics.class));
     }
 
+    @Test
+    void backfillPopulatesIntensityFactorFromStoredNormalizedPower() {
+        Fixture f = new Fixture();
+        f.stubFtp(250);
+        ActivityMetrics row = new ActivityMetrics();
+        row.setActivityId(100L);
+        row.setNormalizedPower(new BigDecimal("200.00")); // stored NP, IF null
+        when(f.metrics.findMissingIntensityFactorByAthlete(STRAVA_ATHLETE_ID)).thenReturn(List.of(row));
+
+        int updated = f.service.backfillIntensityFactors(STRAVA_ATHLETE_ID);
+
+        assertEquals(1, updated);
+        // IF = 200 / 250 = 0.8, from stored NP — streams are never re-read
+        assertEquals(0, row.getIntensityFactor().compareTo(new BigDecimal("0.8")));
+        verify(f.streams, org.mockito.Mockito.never()).findWattsByActivityIdOrdered(any());
+    }
+
+    @Test
+    void backfillIsNoOpWhenFtpStillUnavailable() {
+        Fixture f = new Fixture();
+        f.stubNoFtp();
+
+        int updated = f.service.backfillIntensityFactors(STRAVA_ATHLETE_ID);
+
+        assertEquals(0, updated);
+        // without FTP the candidate query is never even executed
+        verify(f.metrics, org.mockito.Mockito.never()).findMissingIntensityFactorByAthlete(any());
+    }
+
+    @Test
+    void backfillDoesNotTouchNormalIngestionQuery() {
+        Fixture f = new Fixture();
+        f.stubFtp(250);
+        when(f.metrics.findMissingIntensityFactorByAthlete(STRAVA_ATHLETE_ID)).thenReturn(List.of());
+
+        f.service.backfillIntensityFactors(STRAVA_ATHLETE_ID);
+
+        // the skip-already-computed invariant of the per-sync flow is preserved:
+        // backfill never invokes findActivitiesNeedingMetricsComputation
+        verify(f.activities, org.mockito.Mockito.never()).findActivitiesNeedingMetricsComputation(any());
+    }
+
     // --- helpers ---
 
     private static Activity buildActivity() {

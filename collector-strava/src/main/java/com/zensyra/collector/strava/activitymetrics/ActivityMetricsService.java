@@ -61,6 +61,33 @@ public class ActivityMetricsService {
         }
     }
 
+    /**
+     * Recomputes the intensity factor for the athlete's historical metrics rows
+     * that have normalized power but no IF yet (computed before FTP existed, #29).
+     * Uses the already-stored NP — it does not re-read streams — and the FTP now
+     * available. No-op when FTP is still unavailable (athlete without a power meter).
+     * The normal ingestion query (skip-already-computed) is left untouched.
+     *
+     * @return the number of rows whose intensity factor was populated
+     */
+    @Transactional
+    public int backfillIntensityFactors(Long athleteId) {
+        Integer ftpWatts = resolveFtpWatts(athleteId);
+        if (ftpWatts == null || ftpWatts <= 0) {
+            LOG.infof("IF backfill skipped — no FTP available for athlete %d", athleteId);
+            return 0;
+        }
+
+        List<ActivityMetrics> rows = metricsRepository.findMissingIntensityFactorByAthlete(athleteId);
+        int updated = 0;
+        for (ActivityMetrics metrics : rows) {
+            metrics.setIntensityFactor(round(metrics.getNormalizedPower().doubleValue() / ftpWatts));
+            updated++;
+        }
+        LOG.infof("IF backfill — athlete %d: populated intensity factor on %d historical rows", athleteId, updated);
+        return updated;
+    }
+
     private void computeForActivity(Activity activity, Integer ftpWatts) {
         List<Integer> watts = streamRepository.findWattsByActivityIdOrdered(activity.getId());
         if (watts.size() < ROLLING_WINDOW_SECONDS) {
