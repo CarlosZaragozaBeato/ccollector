@@ -40,7 +40,7 @@ Source: Strava `/athlete` endpoint.
 | `weight` | DECIMAL(5,2) | kg; current snapshot only, no history |
 | `profile` | VARCHAR(500) | Avatar URL |
 | `measurement_preference` | VARCHAR(20) | `feet` or `meters` |
-| `ftp` | INTEGER | Functional threshold power (W) — stored, not yet used in any computation (see §3) |
+| `ftp` | INTEGER | Functional threshold power (W). Source of truth is Strava `/athlete`, not `/athlete/zones` (which never exposes FTP). Promoted to `athlete_profiles.ftp_watts` (Issue #28) so the read side can access it under ADR-001; not yet wired into any computation (see §3) |
 | `follower_count`, `friend_count` | INTEGER | |
 | `premium` | BOOLEAN | Strava subscription tier |
 
@@ -444,7 +444,7 @@ These are computed inside SQL views in `views_strava_advanced.sql` and not persi
 
 | Gap | Detail |
 |---|---|
-| **IF is never written** | `activity_metrics.intensity_factor` has a schema column and an entity field but `ActivityMetricsService` never populates it. Standard IF = NP / FTP requires a per-athlete FTP, and `athletes.ftp` is not wired into the job. |
+| **IF is never written** | `activity_metrics.intensity_factor` has a schema column and an entity field but `ActivityMetricsService` never populates it. Standard IF = NP / FTP requires a per-athlete FTP. FTP is now promoted to the canonical `athlete_profiles.ftp_watts` (Issue #28), but wiring it into `ActivityMetricsService` remains future work (Issue #29/#30). |
 | **TSS is an approximation** | The fixed `IF = 0.75` in `TrainingLoadService.estimateTss()` means TSS, CTL, ATL, and TSB are rough estimates. A correct TSS requires `IF = NP / FTP`, which in turn requires power streams and a valid FTP per athlete. Any athlete without power meter data will never get a true TSS regardless. |
 | **Athlete zones not used in views** | `athlete_zones` stores Strava's actual HR and power zones, but `fn_hr_zone()` ignores them and uses `220 − age` to estimate max HR. Time-in-zone figures derived from the estimated zones may not match what Strava shows. |
 

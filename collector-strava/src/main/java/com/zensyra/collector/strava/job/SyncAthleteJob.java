@@ -3,6 +3,7 @@ package com.zensyra.collector.strava.job;
 import com.zensyra.collector.core.oauth.OAuthToken;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.api.dto.StravaAthleteDto;
+import com.zensyra.collector.strava.athlete.AthleteFtpPromotionService;
 import com.zensyra.collector.strava.athlete.AthleteUpsertService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -15,6 +16,9 @@ public class SyncAthleteJob extends AbstractStravaJob {
 
     @Inject
     AthleteUpsertService athleteUpsertService;
+
+    @Inject
+    AthleteFtpPromotionService athleteFtpPromotionService;
 
     @Override
     public String jobId() {
@@ -33,6 +37,7 @@ public class SyncAthleteJob extends AbstractStravaJob {
             String accessToken = validAccessToken(token);
             StravaAthleteDto dto = stravaApiClient.getAthlete("Bearer " + accessToken);
             athleteUpsertService.upsert(dto);
+            athleteFtpPromotionService.promoteFtp(token, dto.getFtp());
         } catch (Exception e) {
             LOG.errorf(e, "Error synchronizing athlete for user '%s'", externalUserId);
             throw e;
