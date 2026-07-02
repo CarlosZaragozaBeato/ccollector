@@ -41,6 +41,10 @@
             <groupId>com.zensyra</groupId>
             <artifactId>collector-query</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.zensyra</groupId>
+            <artifactId>collector-journal</artifactId>
+        </dependency>
 
         <!-- ===== SCHEDULING ===== -->
         <!-- Quartz persistence in PostgreSQL: jobs survive restarts. -->

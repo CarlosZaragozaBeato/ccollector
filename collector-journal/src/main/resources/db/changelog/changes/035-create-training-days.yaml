@@ -1,0 +1,80 @@
+databaseChangeLog:
+  - changeSet:
+      id: 035-create-training-days
+      author: zensyra
+      comment: Creates the training_days table for manual daily diary entries (Design 003 §1.1).
+      changes:
+        - createTable:
+            tableName: training_days
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_training_days
+                    nullable: false
+              - column:
+                  name: athlete_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: perceived_effort
+                  type: INT
+              - column:
+                  name: subjective_state
+                  type: VARCHAR(16)
+              - column:
+                  name: notes
+                  type: TEXT
+              - column:
+                  name: weight_kg
+                  type: DOUBLE PRECISION
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: >-
+              ALTER TABLE training_days ADD CONSTRAINT chk_training_days_perceived_effort
+              CHECK (perceived_effort IS NULL OR (perceived_effort >= 1 AND perceived_effort <= 10))
+        - sql:
+            sql: >-
+              ALTER TABLE training_days ADD CONSTRAINT chk_training_days_subjective_state
+              CHECK (subjective_state IN ('EXCELLENT','GOOD','NEUTRAL','POOR','BAD'))
+        - addForeignKeyConstraint:
+            baseTableName: training_days
+            baseColumnNames: athlete_id
+            referencedTableName: athlete_profiles
+            referencedColumnNames: id
+            constraintName: fk_training_days_athlete_id
+            onDelete: RESTRICT
+        - addUniqueConstraint:
+            tableName: training_days
+            columnNames: athlete_id, date
+            constraintName: uq_training_days_athlete_date
+      rollback:
+        - dropUniqueConstraint:
+            tableName: training_days
+            constraintName: uq_training_days_athlete_date
+        - dropForeignKeyConstraint:
+            baseTableName: training_days
+            constraintName: fk_training_days_athlete_id
+        - sql:
+            sql: ALTER TABLE training_days DROP CONSTRAINT chk_training_days_subjective_state
+        - sql:
+            sql: ALTER TABLE training_days DROP CONSTRAINT chk_training_days_perceived_effort
+        - dropTable:
+            tableName: training_days
