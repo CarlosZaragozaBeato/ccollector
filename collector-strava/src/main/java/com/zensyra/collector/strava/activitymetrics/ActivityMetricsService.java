@@ -1,5 +1,10 @@
 package com.zensyra.collector.strava.activitymetrics;
 
+import com.zensyra.collector.core.identity.AthleteProfile;
+import com.zensyra.collector.core.identity.AthleteProfileRepository;
+import com.zensyra.collector.core.identity.IntegrationAccount;
+import com.zensyra.collector.core.identity.IntegrationAccountRepository;
+import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.strava.activity.Activity;
 import com.zensyra.collector.strava.activity.ActivityRepository;
 import com.zensyra.collector.strava.identity.StravaActivityIdentityService;
@@ -32,21 +37,31 @@ public class ActivityMetricsService {
     @Inject
     StravaActivityIdentityService activityIdentityService;
 
+    @Inject
+    IntegrationAccountRepository integrationAccountRepository;
+
+    @Inject
+    AthleteProfileRepository athleteProfileRepository;
+
     @Transactional
     public void computeAndUpsert(Long athleteId) {
         List<Activity> activities = activityRepository.findActivitiesNeedingMetricsComputation(athleteId);
         LOG.infof("ActivityMetricsService: processing %d activities for athlete %d", activities.size(), athleteId);
 
+        // FTP is a per-athlete value; resolve it once for the whole batch. Null when
+        // the athlete has no power data set (#28) — intensity factor stays null then.
+        Integer ftpWatts = resolveFtpWatts(athleteId);
+
         for (Activity activity : activities) {
             try {
-                computeForActivity(activity);
+                computeForActivity(activity, ftpWatts);
             } catch (Exception e) {
                 LOG.errorf(e, "Error calculating metrics for activity id=%d", activity.getId());
             }
         }
     }
 
-    private void computeForActivity(Activity activity) {
+    private void computeForActivity(Activity activity, Integer ftpWatts) {
         List<Integer> watts = streamRepository.findWattsByActivityIdOrdered(activity.getId());
         if (watts.size() < ROLLING_WINDOW_SECONDS) {
             return;
@@ -73,7 +88,31 @@ public class ActivityMetricsService {
             metrics.setEfficiencyFactor(round(normalizedPower / activity.getAverageHeartrate().doubleValue()));
         }
 
+        // Intensity Factor = NP / FTP. Only when a positive FTP is known for the athlete;
+        // otherwise it stays null (never 0, never a fallback) — see #28/#29.
+        if (ftpWatts != null && ftpWatts > 0) {
+            metrics.setIntensityFactor(round(normalizedPower / ftpWatts));
+        }
+
         metricsRepository.persist(metrics);
+    }
+
+    /**
+     * Resolves the athlete's FTP (watts) from the canonical {@link AthleteProfile},
+     * mapping the Strava numeric athlete id through its {@link IntegrationAccount}.
+     * Returns null when the account, profile, or FTP value is absent — the intensity
+     * factor is then left null rather than defaulted.
+     */
+    private Integer resolveFtpWatts(Long stravaAthleteId) {
+        IntegrationAccount account = integrationAccountRepository
+                .findBySourceAndExternalUserId(IntegrationSource.STRAVA, String.valueOf(stravaAthleteId))
+                .orElse(null);
+        if (account == null) {
+            return null;
+        }
+        return athleteProfileRepository.findByIdOptional(account.getAthleteId())
+                .map(AthleteProfile::getFtpWatts)
+                .orElse(null);
     }
 
     /**
