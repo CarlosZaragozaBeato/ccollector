@@ -18,6 +18,7 @@
         <module>collector-query</module>
         <module>collector-strava</module>
         <module>collector-api</module>
+        <module>collector-dashboard</module>
         <module>collector-runner</module>
     </modules>
 
@@ -95,6 +96,11 @@
             <dependency>
                 <groupId>com.zensyra</groupId>
                 <artifactId>collector-query</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zensyra</groupId>
+                <artifactId>collector-dashboard</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
