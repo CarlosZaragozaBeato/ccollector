@@ -34,10 +34,11 @@ public class TrainingLoadSummaryResource {
     @Operation(
             summary = "Weekly/monthly training load summary",
             description = "Returns accumulated TSS and end-of-period CTL/ATL/TSB snapshots per calendar period. "
-                    + "**TSS approximation**: values are estimated as "
-                    + "`(moving_time_seconds / 3600) × IF² × 100` with a fixed intensity factor "
-                    + "IF = 0.75 (no power meter required). Real power-based TSS will replace this "
-                    + "once athlete FTP is wired in (tracked separately). "
+                    + "**TSS**: values are computed as "
+                    + "`(moving_time_seconds / 3600) × IF² × 100`, using each activity's real "
+                    + "intensity factor IF = NP / FTP when power data and athlete FTP are available. When an "
+                    + "activity has no real IF (no power meter, or FTP not yet set), it falls back to the "
+                    + "fixed approximation IF = 0.75 for that activity only. "
                     + "`ctlEnd`, `atlEnd`, `tsbEnd` are the CTL/ATL/TSB recorded on the last day with data "
                     + "in the period; null when the period has no training rows.")
     public Response list(

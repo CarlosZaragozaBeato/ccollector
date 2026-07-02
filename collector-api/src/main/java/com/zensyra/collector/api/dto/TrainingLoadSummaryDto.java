@@ -8,8 +8,9 @@ import java.time.LocalDate;
 /**
  * REST response record for one period's training load aggregate.
  *
- * <p>TSS approximation: {@code (moving_time_seconds / 3600) × IF² × 100},
- * with intensity factor IF = 0.75 (no power meter required). This matches
+ * <p>TSS: {@code (moving_time_seconds / 3600) × IF² × 100}, using each activity's
+ * real intensity factor IF = NP / FTP when power data and athlete FTP are available,
+ * falling back to a fixed IF = 0.75 only when an activity has no real IF. This matches
  * the estimate used by {@code TrainingLoadService} when populating
  * {@code athlete_training_load.tss_day}. {@code totalTss} is the sum of
  * {@code tss_day} for every day in the period.

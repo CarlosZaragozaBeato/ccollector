@@ -22,6 +22,7 @@ public class StravaCollector implements DataCollector {
     @Inject InitialHistoricalSyncJob initialHistoricalSyncJob;
     @Inject ComputeTrainingLoadJob computeTrainingLoadJob;
     @Inject ComputeActivityMetricsJob computeActivityMetricsJob;
+    @Inject BackfillTrainingLoadJob backfillTrainingLoadJob;
     @Inject SyncRoutesJob syncRoutesJob;
 
     @Override
@@ -42,6 +43,7 @@ public class StravaCollector implements DataCollector {
                 initialHistoricalSyncJob,
                 computeTrainingLoadJob,
                 computeActivityMetricsJob,
+                backfillTrainingLoadJob,
                 syncRoutesJob
         );
     }

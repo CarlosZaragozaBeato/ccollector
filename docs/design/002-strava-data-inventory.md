@@ -444,8 +444,8 @@ These are computed inside SQL views in `views_strava_advanced.sql` and not persi
 
 | Gap | Detail |
 |---|---|
-| **IF is never written** | `activity_metrics.intensity_factor` has a schema column and an entity field but `ActivityMetricsService` never populates it. Standard IF = NP / FTP requires a per-athlete FTP. FTP is now promoted to the canonical `athlete_profiles.ftp_watts` (Issue #28), but wiring it into `ActivityMetricsService` remains future work (Issue #29/#30). |
-| **TSS is an approximation** | The fixed `IF = 0.75` in `TrainingLoadService.estimateTss()` means TSS, CTL, ATL, and TSB are rough estimates. A correct TSS requires `IF = NP / FTP`, which in turn requires power streams and a valid FTP per athlete. Any athlete without power meter data will never get a true TSS regardless. |
+| **IF is never written** — *resolved (#29, #30)* | `activity_metrics.intensity_factor` is now populated at ingestion (`IF = NP / FTP`, #29) and backfilled for historical rows via the admin-triggered `strava.backfill-training-load` job (#30). Still null for athletes without a power meter or FTP — by design. |
+| **TSS is an approximation** — *resolved for power activities (#30)* | `TrainingLoadService.estimateTss()` now uses each activity's real `intensity_factor` when present; the fixed `IF = 0.75` remains only as a per-activity fallback when no real IF exists (no power meter, or FTP unavailable). Athletes without power data still get the approximation — inherent limit, not a gap. |
 | **Athlete zones not used in views** | `athlete_zones` stores Strava's actual HR and power zones, but `fn_hr_zone()` ignores them and uses `220 − age` to estimate max HR. Time-in-zone figures derived from the estimated zones may not match what Strava shows. |
 
 ### 3.2 Missing aggregations

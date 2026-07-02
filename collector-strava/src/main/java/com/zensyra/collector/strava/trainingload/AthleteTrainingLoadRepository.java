@@ -21,4 +21,19 @@ public class AthleteTrainingLoadRepository implements PanacheRepositoryBase<Athl
     public List<AthleteTrainingLoad> findByAthleteIdAndDateRange(Long athleteId, LocalDate from, LocalDate to) {
         return list("athleteId = ?1 and date >= ?2 and date <= ?3 order by date asc", athleteId, from, to);
     }
+
+    /**
+     * Every date that already has a stored daily row for this athlete, ascending.
+     * Used by the training-load backfill to recompute existing rows only — without
+     * creating rows for dates that were never covered.
+     */
+    public List<LocalDate> findDatesByAthleteId(Long athleteId) {
+        return getEntityManager()
+                .createQuery(
+                        "select t.date from AthleteTrainingLoad t "
+                                + "where t.athleteId = :athleteId order by t.date asc",
+                        LocalDate.class)
+                .setParameter("athleteId", athleteId)
+                .getResultList();
+    }
 }
