@@ -308,9 +308,9 @@ TSS = (moving_time_seconds / 3600) × IF² × 100
 ```
 
 **Inputs:** `activities.moving_time`  
-**Caveat:** `IF` is hard-coded to `0.75` for every activity, regardless of sport,
-intensity, or athlete FTP. This is a rough approximation. Real TSS requires
-`IF = NP / FTP` and therefore power-stream data. See §3.
+**Behavior:** `IF` is each activity's real intensity factor (`IF = NP / FTP`) when
+`activity_metrics.intensity_factor` is populated (#29); it falls back to a fixed
+`IF = 0.75` only when no real IF exists (no power meter, or FTP unavailable). See §3.
 
 ---
 
@@ -403,9 +403,9 @@ improving aerobic fitness: more power output at the same cardiac cost.
 ### IF — Intensity Factor (per activity)
 
 **Column:** `activity_metrics.intensity_factor`  
-**Status: never written.** `ActivityMetricsService` defines no setter call for
-`intensityFactor`. The column exists in the schema and the entity, but the job
-produces no value for it.
+**Status: populated (#29).** `ActivityMetricsService` computes `IF = NP / FTP` at
+ingestion and persists it to the column; historical rows are corrected by the
+`strava.backfill-training-load` job (#30). Null only when FTP is unavailable.
 
 Standard formula:
 
@@ -413,10 +413,9 @@ Standard formula:
 IF = NP / FTP
 ```
 
-`athletes.ftp` is stored but is not wired into `ActivityMetricsService`. IF requires
-a per-athlete FTP value; without it the column cannot be populated correctly. TSS also
-depends on IF (and therefore FTP); its fixed-constant approximation is a direct
-consequence of this missing link. See §3.
+`athlete_profiles.ftp_watts` (promoted from Strava in #28) supplies the per-athlete
+FTP. `ActivityMetricsService` computes `IF = NP / FTP` and `TrainingLoadService` uses
+this real IF for TSS, falling back to a fixed `IF = 0.75` only when it is null. See §3.
 
 ---
 
