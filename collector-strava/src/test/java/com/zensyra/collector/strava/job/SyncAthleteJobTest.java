@@ -9,6 +9,7 @@ import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.core.sync.SyncContext;
 import com.zensyra.collector.strava.api.StravaApiClient;
 import com.zensyra.collector.strava.api.dto.StravaAthleteDto;
+import com.zensyra.collector.strava.athlete.AthleteFtpPromotionService;
 import com.zensyra.collector.strava.athlete.AthleteUpsertService;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -52,6 +53,9 @@ class SyncAthleteJobTest {
     @InjectMock
     AthleteUpsertService athleteUpsertService;
 
+    @InjectMock
+    AthleteFtpPromotionService athleteFtpPromotionService;
+
     @Inject
     SyncAthleteJob job;
 
@@ -64,6 +68,21 @@ class SyncAthleteJobTest {
         assertDoesNotThrow(() -> job.execute(buildContext()));
 
         verify(athleteUpsertService).upsert(dto);
+    }
+
+    @Test
+    void shouldPromoteFtpAfterUpsert() throws Exception {
+        OAuthToken token = buildToken("12345");
+        when(tokenRepository.findAllBySource(IntegrationSource.STRAVA)).thenReturn(List.of(token));
+        when(tokenService.getValidToken(IntegrationSource.STRAVA, "12345")).thenReturn("test-access-token");
+        StravaAthleteDto dto = buildAthleteDto(12345L);
+        dto.setFtp(250);
+        when(stravaApiClient.getAthlete(anyString())).thenReturn(dto);
+
+        assertDoesNotThrow(() -> job.execute(buildContext()));
+
+        verify(athleteUpsertService).upsert(dto);
+        verify(athleteFtpPromotionService).promoteFtp(token, 250);
     }
 
     @Test
