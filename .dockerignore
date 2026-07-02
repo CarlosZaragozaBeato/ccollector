@@ -34,6 +34,9 @@ target/
 **/target/**
 !collector-runner/target/
 !collector-runner/target/*-runner
+
+# Node binary downloaded by frontend-maven-plugin (can be several hundred MB)
+collector-dashboard/node/
 *.class
 jacoco.exec
 *.exec

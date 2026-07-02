@@ -1,0 +1,44 @@
+services:
+
+  # ---------------------------------------------------------------------------
+  # TimescaleDB — PostgreSQL 16 with TimescaleDB extension
+  # ---------------------------------------------------------------------------
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-collector}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Creates the 'collector' schema on first boot (init scripts run once,
+      # when the data volume is empty).
+      - ./docker/init-schema.sql:/docker-entrypoint-initdb.d/01-init-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${POSTGRES_DB:-collector}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # CCollector app — built from local source
+  # Liquibase runs automatically on startup (quarkus.liquibase.migrate-at-start=true).
+  # ---------------------------------------------------------------------------
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      # DB_JDBC_URL is constructed here so the host 'db' resolves to the
+      # container above. This overrides whatever DB_JDBC_URL is set in .env.
+      DB_JDBC_URL: "jdbc:postgresql://db:5432/${POSTGRES_DB:-collector}?currentSchema=collector"
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    restart: unless-stopped
+
+volumes:
+  db-data:

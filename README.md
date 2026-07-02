@@ -2,6 +2,58 @@
 
 CCollector is a Java/Quarkus data collector for endurance-sport data. It currently integrates with Strava, stores OAuth tokens and athlete data in PostgreSQL, syncs activities, activity details, laps, best efforts, gear, routes, zones, stats snapshots, and high-volume activity streams into TimescaleDB, then exposes a small secured read API for downstream products. It is a working ingestion/read-service backend, not a finished consumer application.
 
+## Quick Start
+
+Bring up a full local stack (TimescaleDB + app) with a single command.
+The DB schema is created automatically by Liquibase on first boot — no manual SQL steps.
+
+**Prerequisites:** Docker with the Compose plugin (included in Docker Desktop).
+
+```bash
+# 1. Clone
+git clone https://github.com/CarlosZaragozaBeato/ccollector.git
+cd ccollector
+
+# 2. Configure secrets
+cp .env.example .env
+# Edit .env — fill in DB_USERNAME, DB_PASSWORD, COLLECTOR_API_KEY, ADMIN_TOKEN
+# and generate an encryption key:
+#   openssl rand -base64 32   → paste into COLLECTOR_ENCRYPTION_KEY
+
+# 3. Configure the dashboard (use placeholder athleteId for now — see note below)
+cp collector-dashboard/public/config.json.example \
+   collector-dashboard/public/config.json
+# Edit config.json and set "apiKey" to the value of COLLECTOR_API_KEY in .env
+
+# 4. Build and start
+docker compose up --build
+```
+
+Open **http://localhost:8080/dashboard/** once the stack is running.
+Swagger UI is at **http://localhost:8080/q/swagger-ui**.
+
+> **Dashboard athleteId — two-step process.**
+> `config.json` is baked into the JAR at build time, so the dashboard shows a
+> placeholder UUID until you rebuild after Strava registration.
+>
+> **Step A — First run:** leave `athleteId` as the placeholder and complete the
+> Strava setup below (create API app → seed credentials → authorize athlete →
+> register). The `POST /api/v1/athletes/register` response contains your real
+> `athleteId`.
+>
+> **Step B — After registration:** edit `collector-dashboard/public/config.json`
+> with your real `athleteId`, then run:
+> ```bash
+> docker compose up --build
+> ```
+> You must use `--build` (not just `docker compose up`) — without it, Docker
+> reuses the cached image and the dashboard still shows the old placeholder.
+
+Follow **[Connect Your Strava Account](#connect-your-strava-account)** for the
+full credential and registration walkthrough.
+
+---
+
 ## Why I Built It
 
 I built this project to understand my own running data at a lower level than the dashboards exposed by consumer apps. I wanted a backend that could pull raw training data, keep the time-series stream samples, compute basic training-load and activity metrics, and leave room for experiments with coaching analytics. The project reflects how I approach sports-tech systems: reliable ingestion first, then useful derived metrics and product-facing APIs.
