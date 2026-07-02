@@ -8,8 +8,8 @@ import java.util.UUID;
  *
  * <p>{@code totalTss} is the sum of daily TSS estimates for every day in the
  * period. The underlying estimate uses
- * {@code (moving_time_seconds / 3600) × IF² × 100} with IF = 0.75 (no
- * power meter required) — see {@code TrainingLoadService} for the derivation.
+ * {@code (moving_time_seconds / 3600) × IF² × 100}, using each activity's real
+ * intensity factor IF = NP / FTP, with a fixed IF = 0.75 fallback only when null.
  *
  * <p>{@code ctlEnd}, {@code atlEnd}, {@code tsbEnd} are the CTL/ATL/TSB
  * snapshots recorded on the <em>last day with data</em> within the period,

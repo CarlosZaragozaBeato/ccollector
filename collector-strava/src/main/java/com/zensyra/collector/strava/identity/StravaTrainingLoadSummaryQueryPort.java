@@ -37,7 +37,8 @@ import java.util.UUID;
  *       in the period (approximates end-of-period fitness / fatigue / form)
  * </ul>
  *
- * <p>TSS approximation: {@code (moving_time_s / 3600) × IF² × 100}, IF = 0.75.
+ * <p>TSS: {@code (moving_time_s / 3600) × IF² × 100}, using each activity's real
+ * intensity factor when available, falling back to IF = 0.75 only when it is null.
  * See {@code TrainingLoadService} for the full derivation.
  */
 @ApplicationScoped

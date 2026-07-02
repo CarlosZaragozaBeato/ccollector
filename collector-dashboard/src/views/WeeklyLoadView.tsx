@@ -61,15 +61,6 @@ export default function WeeklyLoadView({
         <h2 className="text-lg font-semibold text-gray-800">Weekly Training Load (last 12 weeks)</h2>
       </div>
 
-      {/* TSS approximation note — visible, not in a tooltip */}
-      <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-2 text-sm text-amber-800">
-        <strong>Note:</strong> TSS values are approximate — computed as{' '}
-        <code className="font-mono text-xs bg-amber-100 px-1 rounded">
-          (moving_time_s / 3600) × IF² × 100
-        </code>{' '}
-        with a fixed intensity factor IF = 0.75. Real power-based TSS requires athlete FTP.
-      </div>
-
       {loading && (
         <div className="flex items-center justify-center h-64 text-gray-500">
           <svg className="animate-spin h-6 w-6 mr-2" viewBox="0 0 24 24" fill="none">
