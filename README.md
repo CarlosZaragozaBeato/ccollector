@@ -7,7 +7,13 @@ CCollector is a Java/Quarkus data collector for endurance-sport data. It current
 Bring up a full local stack (TimescaleDB + app) with a single command.
 The DB schema is created automatically by Liquibase on first boot — no manual SQL steps.
 
-**Prerequisites:** Docker with the Compose plugin (included in Docker Desktop).
+**Prerequisites:**
+- Docker v24+ with the Compose plugin — included in [Docker Desktop](https://docs.docker.com/desktop/);
+  for Linux, install [Docker Engine](https://docs.docker.com/engine/install/) +
+  the [Compose plugin](https://docs.docker.com/compose/install/).
+  Use `docker compose` (v2), not the legacy `docker-compose` (v1).
+- Git
+- No JDK, Node.js, or Maven required — the multi-stage Dockerfile handles the full build.
 
 ```bash
 # 1. Clone
@@ -262,6 +268,9 @@ Strava API application before registering an athlete.
 
 ### Step 2 — Start the application
 
+> **Using docker-compose?** The app is already running after `docker compose up --build`.
+> Skip straight to Step 3.
+
 Ensure your `.env.local` is complete and start the app:
 
 ```bash
@@ -282,8 +291,14 @@ curl -s http://localhost:8080/q/health/ready | jq .status
 The Client ID and Secret are stored in the `integration_credentials` table,
 encrypted at rest with `COLLECTOR_ENCRYPTION_KEY`. Insert them via psql:
 
+```bash
+# docker-compose: connect to the db container
+docker compose exec db psql -U <DB_USERNAME> -d collector
+# local install: connect to your PostgreSQL instance as usual
+```
+
 ```sql
--- Connect to your database first, then:
+-- Then run:
 INSERT INTO integration_credentials (source, client_id, client_secret)
 VALUES ('STRAVA', '<your-client-id>', '<your-client-secret>');
 ```
@@ -384,6 +399,33 @@ After the sync completes, query your activities:
 curl -s "http://localhost:8080/api/v1/athletes/<athleteId>/activities?size=5" \
   -H "X-API-Key: <COLLECTOR_API_KEY>" | jq .
 ```
+
+## Troubleshooting
+
+**`db` service fails healthcheck / app exits immediately**
+The `pg_isready` check timed out. Usually means `DB_USERNAME` or `DB_PASSWORD` in `.env`
+don't match the values PostgreSQL was initialised with. Stop the stack, remove the
+data volume (`docker compose down -v`), correct the values, and start again.
+
+**Liquibase fails with "schema collector does not exist"**
+`docker/init-schema.sql` was not mounted into the `db` container. Verify the file exists
+and that the volume mount in `docker-compose.yml` is intact. Remove the data volume and
+restart: `docker compose down -v && docker compose up --build`.
+
+**Dashboard shows placeholder UUID (all-zeros athleteId)**
+`config.json` was not updated with your real `athleteId` after Strava registration, or
+`docker compose up --build` was not re-run after editing it. Edit
+`collector-dashboard/public/config.json` with the UUID from the register response, then
+run `docker compose up --build` (the `--build` flag is required — without it Docker
+reuses the cached image and the old config.json stays baked in).
+
+**Port 8080 already in use**
+Set `HTTP_PORT=<other-port>` in `.env` (e.g. `HTTP_PORT=8090`) and restart.
+
+**`docker compose up --build` is slow the first time**
+Expected — Maven resolves dependencies, the frontend-maven-plugin downloads Node 20 LTS,
+and `npm ci` fetches packages. The full first build takes roughly 3–4 minutes. Subsequent
+builds are faster because Docker caches the dependency resolution layer.
 
 ---
 
