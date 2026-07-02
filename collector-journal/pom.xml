@@ -12,10 +12,10 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>collector-api</artifactId>
+    <artifactId>collector-journal</artifactId>
     <description>
-        Public read REST API. Exposes activities, training load, and statistics
-        to TTemplate and BBrain without direct database access.
+        Manual athlete diary: TrainingDay entries with subjective state, RPE, notes, and body weight.
+        Source-neutral — no dependency on collector-strava or any specific integration.
     </description>
 
     <dependencies>
@@ -29,41 +29,15 @@
             <groupId>com.zensyra</groupId>
             <artifactId>collector-query</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.zensyra</groupId>
-            <artifactId>collector-journal</artifactId>
-        </dependency>
 
-        <!-- ===== REST (servidor) ===== -->
+        <!-- ===== PERSISTENCE ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest</artifactId>
+            <artifactId>quarkus-hibernate-orm-panache</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest-jackson</artifactId>
-        </dependency>
-
-        <!-- ===== REST CLIENT (required for StravaApiClient to be a CDI bean in tests) ===== -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest-client</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest-client-jackson</artifactId>
-        </dependency>
-
-        <!-- ===== OPENAPI / SWAGGER UI ===== -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-smallrye-openapi</artifactId>
-        </dependency>
-
-        <!-- ===== VALIDATION ===== -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-hibernate-validator</artifactId>
+            <artifactId>quarkus-jdbc-postgresql</artifactId>
         </dependency>
 
         <!-- ===== TESTING ===== -->
@@ -75,11 +49,6 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit5-mockito</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.rest-assured</groupId>
-            <artifactId>rest-assured</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -104,8 +73,7 @@
                 </executions>
             </plugin>
             <!-- Generates META-INF/jandex.idx so Quarkus discovers this module's
-                 beans and JAX-RS resources when collector-runner builds the
-                 native binary with Mandrel. -->
+                 beans when it is used as a dependency (collector-api, collector-runner). -->
             <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>

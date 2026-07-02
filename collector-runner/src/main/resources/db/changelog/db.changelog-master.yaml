@@ -37,3 +37,6 @@ databaseChangeLog:
 
   - include:
       file: db/changelog/changes/034-enforce-oauth-tokens-integration-account-not-null.yaml
+
+  - include:
+      file: db/changelog/db.changelog-journal.yaml
