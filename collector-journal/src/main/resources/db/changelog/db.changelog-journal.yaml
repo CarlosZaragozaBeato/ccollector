@@ -1,3 +1,5 @@
 databaseChangeLog:
   - include:
       file: db/changelog/changes/035-create-training-days.yaml
+  - include:
+      file: db/changelog/changes/037-create-health-events.yaml
