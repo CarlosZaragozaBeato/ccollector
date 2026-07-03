@@ -3,13 +3,15 @@ import { DashboardConfig, loadConfig } from './config'
 import TrendView from './views/TrendView'
 import WeeklyLoadView from './views/WeeklyLoadView'
 import ActivitiesView from './views/ActivitiesView'
+import DiaryView from './views/DiaryView'
 
-type Tab = 'trend' | 'weekly' | 'activities'
+type Tab = 'trend' | 'weekly' | 'activities' | 'diary'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'trend', label: 'Fitness Trends' },
   { id: 'weekly', label: 'Weekly Load' },
   { id: 'activities', label: 'Recent Activities' },
+  { id: 'diary', label: 'Diary' },
 ]
 
 export default function App() {
@@ -111,6 +113,9 @@ mvn package -DskipTests`}
               )}
               {activeTab === 'activities' && (
                 <ActivitiesView athleteId={config.athleteId} apiKey={config.apiKey} />
+              )}
+              {activeTab === 'diary' && (
+                <DiaryView athleteId={config.athleteId} apiKey={config.apiKey} />
               )}
             </div>
           </main>
