@@ -24,8 +24,39 @@ interface TrainingLoadResponse {
   items: TrainingLoadItem[]
 }
 
+// Only the fields used here; the API returns more (id, position, notes, …).
+interface RaceResultDto {
+  id: string
+  raceDate: string
+  raceName: string
+  distanceMeters: number
+  goalFinishTime: number | null
+  actualFinishTime: number | null
+}
+
+type ChartRow = TrainingLoadItem & { race: RaceResultDto | null }
+
 const DAY_OPTIONS = [30, 60, 90] as const
 type Days = (typeof DAY_OPTIONS)[number]
+
+const pad = (n: number) => String(n).padStart(2, '0')
+
+// Seconds → clock: "2:55:30" (with hours) or "25:30" (under an hour).
+const fmtFinish = (secs: number): string => {
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
+}
+
+// Prefer the actual result; fall back to the goal (labelled); omit if neither.
+const fmtFinishLabel = (race: RaceResultDto): string | null => {
+  if (race.actualFinishTime != null) return fmtFinish(race.actualFinishTime)
+  if (race.goalFinishTime != null) return `${fmtFinish(race.goalFinishTime)} (goal)`
+  return null
+}
+
+const fmtRaceDist = (m: number) => `${(m / 1000).toFixed(1)} km`
 
 // Dot color driven by TSB value: green = fresh (>0), red = overreached (<-10), amber = neutral.
 const TsbDot = (props: {
@@ -45,6 +76,41 @@ const fmt = (d: string) => {
   return `${dt.getMonth() + 1}/${dt.getDate()}`
 }
 
+// Custom tooltip: the existing CTL/ATL/TSB rows, plus a race block on days that
+// carry a race (merged into the data point's payload).
+const TrendTooltip = (props: {
+  active?: boolean
+  label?: string | number
+  payload?: Array<{ name?: string; value?: number | string; color?: string; payload?: ChartRow }>
+}) => {
+  const { active, label, payload } = props
+  if (!active || !payload || payload.length === 0) return null
+  const race = payload[0]?.payload?.race ?? null
+  const finish = race ? fmtFinishLabel(race) : null
+
+  return (
+    <div className="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs shadow-sm">
+      <p className="font-medium text-gray-700 mb-1">
+        {new Date(String(label)).toLocaleDateString()}
+      </p>
+      {payload.map((p) => (
+        <p key={p.name} style={{ color: p.color }}>
+          {p.name}: {p.value != null ? Number(p.value).toFixed(1) : '–'}
+        </p>
+      ))}
+      {race && (
+        <div className="mt-1 pt-1 border-t border-gray-100 text-violet-700">
+          <p className="font-semibold">🏁 {race.raceName}</p>
+          <p className="text-gray-600">
+            {fmtRaceDist(race.distanceMeters)}
+            {finish && ` · ${finish}`}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function TrendView({
   athleteId,
   apiKey,
@@ -54,20 +120,45 @@ export default function TrendView({
 }) {
   const [days, setDays] = useState<Days>(90)
   const [data, setData] = useState<TrainingLoadItem[]>([])
+  const [races, setRaces] = useState<RaceResultDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
     setError(null)
-    apiFetch<TrainingLoadResponse>(
-      `/api/v1/athletes/${athleteId}/training-load?days=${days}`,
-      apiKey
-    )
-      .then((r) => setData(r.items))
+
+    const to = new Date()
+    const from = new Date()
+    from.setDate(from.getDate() - days)
+    const toStr = to.toISOString().split('T')[0]
+    const fromStr = from.toISOString().split('T')[0]
+
+    Promise.all([
+      apiFetch<TrainingLoadResponse>(
+        `/api/v1/athletes/${athleteId}/training-load?days=${days}`,
+        apiKey
+      ),
+      apiFetch<RaceResultDto[]>(
+        `/api/v1/athletes/${athleteId}/race-results?from=${fromStr}&to=${toStr}`,
+        apiKey
+      ),
+    ])
+      .then(([load, raceList]) => {
+        setData(load.items)
+        // Belt-and-suspenders: keep only races inside the visible window
+        // (ISO date strings compare lexicographically = chronologically).
+        setRaces(raceList.filter((r) => r.raceDate >= fromStr && r.raceDate <= toStr))
+      })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
   }, [athleteId, apiKey, days])
+
+  const raceByDate = new Map(races.map((r) => [r.raceDate, r]))
+  const chartData: ChartRow[] = data.map((item) => ({
+    ...item,
+    race: raceByDate.get(item.date) ?? null,
+  }))
 
   return (
     <div className="space-y-4">
@@ -118,22 +209,28 @@ export default function TrendView({
             <span className="flex items-center gap-1">
               <span className="inline-block w-3 h-3 rounded-full bg-red-500" /> TSB &lt; −10 (overreached)
             </span>
+            <span className="flex items-center gap-1">
+              <span className="text-sm leading-none">🏁</span> Race
+            </span>
           </div>
           <ResponsiveContainer width="100%" height={360}>
-            <ComposedChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+            <ComposedChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="date" tickFormatter={fmt} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip
-                labelFormatter={(l: string) => new Date(l).toLocaleDateString()}
-                formatter={(v: number, name: string) => [
-                  v != null ? v.toFixed(1) : '–',
-                  name.toUpperCase(),
-                ]}
-              />
+              <Tooltip content={<TrendTooltip />} />
               <Legend />
               <ReferenceLine y={0} stroke="#9ca3af" strokeDasharray="4 2" />
               <ReferenceLine y={-10} stroke="#fca5a5" strokeDasharray="4 2" label={{ value: '−10', fontSize: 10, fill: '#ef4444' }} />
+              {races.map((race) => (
+                <ReferenceLine
+                  key={race.id}
+                  x={race.raceDate}
+                  stroke="#8b5cf6"
+                  strokeDasharray="3 3"
+                  label={{ value: '🏁', position: 'top', fontSize: 12 }}
+                />
+              ))}
               <Line
                 dataKey="ctl"
                 name="CTL (fitness)"
