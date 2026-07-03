@@ -1,0 +1,88 @@
+databaseChangeLog:
+  - changeSet:
+      id: 037-create-health-events
+      author: zensyra
+      comment: Creates the health_events table for personal illness/injury/medication flags (Design 003 §1.3, tightened per #32). Records and flags only — no dosage, severity, or recommendation fields.
+      changes:
+        - createTable:
+            tableName: health_events
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_health_events
+                    nullable: false
+              - column:
+                  name: athlete_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: start_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: end_date
+                  type: DATE
+              - column:
+                  name: type
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: notes
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: >-
+              ALTER TABLE health_events ADD CONSTRAINT chk_health_events_type
+              CHECK (type IN ('ILLNESS','INJURY','MEDICATION_FLAG','OTHER'))
+        - sql:
+            sql: >-
+              ALTER TABLE health_events ADD CONSTRAINT chk_health_events_date_order
+              CHECK (end_date IS NULL OR end_date >= start_date)
+        - addForeignKeyConstraint:
+            baseTableName: health_events
+            baseColumnNames: athlete_id
+            referencedTableName: athlete_profiles
+            referencedColumnNames: id
+            constraintName: fk_health_events_athlete_id
+            onDelete: RESTRICT
+        - createIndex:
+            tableName: health_events
+            indexName: idx_health_events_athlete_start_date
+            columns:
+              - column:
+                  name: athlete_id
+              - column:
+                  name: start_date
+      rollback:
+        - dropIndex:
+            indexName: idx_health_events_athlete_start_date
+            tableName: health_events
+        - dropForeignKeyConstraint:
+            baseTableName: health_events
+            constraintName: fk_health_events_athlete_id
+        - sql:
+            sql: ALTER TABLE health_events DROP CONSTRAINT chk_health_events_date_order
+        - sql:
+            sql: ALTER TABLE health_events DROP CONSTRAINT chk_health_events_type
+        - dropTable:
+            tableName: health_events
