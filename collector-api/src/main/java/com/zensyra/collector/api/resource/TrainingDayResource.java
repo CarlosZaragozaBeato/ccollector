@@ -2,6 +2,7 @@ package com.zensyra.collector.api.resource;
 
 import com.zensyra.collector.api.dto.TrainingDayDto;
 import com.zensyra.collector.api.dto.TrainingDayRequestDto;
+import com.zensyra.collector.journal.JournalFieldLimits;
 import com.zensyra.collector.journal.service.TrainingDayService;
 import com.zensyra.collector.query.model.TrainingDaySummary;
 import com.zensyra.collector.query.port.TrainingDayQueryPort;
@@ -92,6 +93,11 @@ public class TrainingDayResource {
                 && (request.getPerceivedEffort() < 1 || request.getPerceivedEffort() > 10)) {
             return ApiResponses.error(Response.Status.BAD_REQUEST,
                     "perceivedEffort must be between 1 and 10");
+        }
+
+        if (request.getNotes() != null && request.getNotes().length() > JournalFieldLimits.NOTES_MAX) {
+            return ApiResponses.error(Response.Status.BAD_REQUEST,
+                    "'notes' must not exceed " + JournalFieldLimits.NOTES_MAX + " characters");
         }
 
         String stateStr = null;

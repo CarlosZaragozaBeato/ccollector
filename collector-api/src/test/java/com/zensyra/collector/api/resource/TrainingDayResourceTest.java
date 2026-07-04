@@ -193,4 +193,28 @@ class TrainingDayResourceTest {
                 .statusCode(200)
                 .body("[0]", not(hasKey("athleteId")));
     }
+
+    // ---- notes length limit (#37) ----
+
+    @Test
+    void shouldAcceptNotesAtMaxLength() {
+        Instant now = Instant.parse("2025-06-15T08:00:00Z");
+        when(trainingDayService.upsert(eq(ATHLETE_ID), any(), any(), any(), any(), any()))
+                .thenReturn(new TrainingDaySummary(LocalDate.of(2025, 6, 15), null, null,
+                        "a".repeat(5000), null, now, now));
+
+        given().header("X-API-Key", API_KEY).contentType("application/json")
+                .body("{\"date\":\"2025-06-15\",\"notes\":\"" + "a".repeat(5000) + "\"}")
+                .when().post("/api/v1/athletes/{id}/training-days", ATHLETE_ID)
+                .then().statusCode(201);
+    }
+
+    @Test
+    void shouldReturn400WhenNotesExceedsMaxLength() {
+        given().header("X-API-Key", API_KEY).contentType("application/json")
+                .body("{\"date\":\"2025-06-15\",\"notes\":\"" + "a".repeat(5001) + "\"}")
+                .when().post("/api/v1/athletes/{id}/training-days", ATHLETE_ID)
+                .then().statusCode(400)
+                .body("error", is("'notes' must not exceed 5000 characters"));
+    }
 }
