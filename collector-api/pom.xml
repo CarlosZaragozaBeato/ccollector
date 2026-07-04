@@ -87,6 +87,28 @@
             <artifactId>quarkus-jdbc-h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- First use of Testcontainers in collector-api: the FK-violation → 404
+             mapping can only be exercised against a real Postgres FK, which H2
+             (schema from entity mappings, no FK) cannot enforce. Version is
+             managed by the root pom's testcontainers.version (1.21.4). -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jdbc-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Test-only: lets the FK integration test build the real journal schema
+             (035/037/038) from the actual migrations rather than hand-copied DDL.
+             The H2 unit tests keep quarkus.liquibase.enabled=false. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-liquibase</artifactId>
+            <scope>test</scope>
+        </dependency>
 
     </dependencies>
 
@@ -115,6 +137,20 @@
                         <id>make-index</id>
                         <goals>
                             <goal>jandex</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Runs *IT tests (Testcontainers FK integration test) at the
+                 verify phase — same pattern as collector-runner. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
                         </goals>
                     </execution>
                 </executions>

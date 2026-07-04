@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 import java.time.LocalDate;
+import java.util.Optional;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -25,10 +26,15 @@ public class TrainingDayService {
     public TrainingDaySummary upsert(UUID athleteId, LocalDate date,
                                      Integer perceivedEffort, String subjectiveStateStr,
                                      String notes, Double weightKg) {
-        TrainingDay td = repository.findByAthleteIdAndDate(athleteId, date)
-                .orElseGet(TrainingDay::new);
+        // (athleteId, date) is the real unique key. The entity's id is
+        // pre-initialized (UUID.randomUUID()), so it is never null and cannot be
+        // used to tell create from update — deriving isNew from the lookup itself
+        // is the source of truth. Using getId() here silently skipped persist()
+        // for new entries (create data loss).
+        Optional<TrainingDay> existing = repository.findByAthleteIdAndDate(athleteId, date);
+        TrainingDay td = existing.orElseGet(TrainingDay::new);
 
-        boolean isNew = td.getId() == null;
+        boolean isNew = existing.isEmpty();
         if (isNew) {
             td.setAthleteId(athleteId);
             td.setDate(date);
