@@ -205,4 +205,51 @@ class RaceResultResourceTest {
         assertEquals(to.getValue().minusMonths(12), from.getValue());
         assertNotEquals(to.getValue().minusMonths(3), from.getValue());
     }
+
+    // ---- field length limits (#37) ----
+
+    private String racePost(String raceName, String notes) {
+        return "{\"raceDate\":\"2025-04-27\",\"raceName\":\"" + raceName + "\","
+                + "\"distanceMeters\":42195.0,\"notes\":\"" + notes + "\"}";
+    }
+
+    @Test
+    void shouldAcceptRaceNameAtMaxLength() {
+        when(raceResultService.create(eq(ATHLETE_ID), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(sample(null));
+
+        given().header("X-API-Key", API_KEY).contentType("application/json")
+                .body(racePost("a".repeat(255), "ok"))
+                .when().post("/api/v1/athletes/{id}/race-results", ATHLETE_ID)
+                .then().statusCode(201);
+    }
+
+    @Test
+    void shouldReturn400WhenRaceNameExceedsMaxLength() {
+        given().header("X-API-Key", API_KEY).contentType("application/json")
+                .body(racePost("a".repeat(256), "ok"))
+                .when().post("/api/v1/athletes/{id}/race-results", ATHLETE_ID)
+                .then().statusCode(400)
+                .body("error", is("'raceName' must not exceed 255 characters"));
+    }
+
+    @Test
+    void shouldAcceptNotesAtMaxLength() {
+        when(raceResultService.create(eq(ATHLETE_ID), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(sample(null));
+
+        given().header("X-API-Key", API_KEY).contentType("application/json")
+                .body(racePost("Valencia", "a".repeat(5000)))
+                .when().post("/api/v1/athletes/{id}/race-results", ATHLETE_ID)
+                .then().statusCode(201);
+    }
+
+    @Test
+    void shouldReturn400WhenNotesExceedsMaxLength() {
+        given().header("X-API-Key", API_KEY).contentType("application/json")
+                .body(racePost("Valencia", "a".repeat(5001)))
+                .when().post("/api/v1/athletes/{id}/race-results", ATHLETE_ID)
+                .then().statusCode(400)
+                .body("error", is("'notes' must not exceed 5000 characters"));
+    }
 }

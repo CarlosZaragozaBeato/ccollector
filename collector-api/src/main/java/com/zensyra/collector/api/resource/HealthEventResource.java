@@ -2,6 +2,7 @@ package com.zensyra.collector.api.resource;
 
 import com.zensyra.collector.api.dto.HealthEventDto;
 import com.zensyra.collector.api.dto.HealthEventRequestDto;
+import com.zensyra.collector.journal.JournalFieldLimits;
 import com.zensyra.collector.journal.service.HealthEventService;
 import com.zensyra.collector.query.model.HealthEventSummary;
 import com.zensyra.collector.query.port.HealthEventQueryPort;
@@ -93,6 +94,16 @@ public class HealthEventResource {
         }
         if (request.getTitle() == null || request.getTitle().isBlank()) {
             return ApiResponses.error(Response.Status.BAD_REQUEST, "'title' is required");
+        }
+        // length() (UTF-16 units) >= code points, so this is conservative vs. the
+        // varchar(255) column — it can never let an over-long value reach the DB.
+        if (request.getTitle().length() > JournalFieldLimits.SHORT_TEXT_MAX) {
+            return ApiResponses.error(Response.Status.BAD_REQUEST,
+                    "'title' must not exceed " + JournalFieldLimits.SHORT_TEXT_MAX + " characters");
+        }
+        if (request.getNotes() != null && request.getNotes().length() > JournalFieldLimits.NOTES_MAX) {
+            return ApiResponses.error(Response.Status.BAD_REQUEST,
+                    "'notes' must not exceed " + JournalFieldLimits.NOTES_MAX + " characters");
         }
         if (request.getType() == null) {
             return ApiResponses.error(Response.Status.BAD_REQUEST, "'type' is required");

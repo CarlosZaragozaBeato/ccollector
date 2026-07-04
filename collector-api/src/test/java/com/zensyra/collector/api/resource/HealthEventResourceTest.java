@@ -233,4 +233,54 @@ class HealthEventResourceTest {
         // And it is exactly now().minusMonths(3) .. now() (robust: from == to.minusMonths(3)).
         assertEquals(heTo.getValue().minusMonths(3), heFrom.getValue());
     }
+
+    // ---- field length limits (#37) ----
+
+    @Test
+    void shouldAcceptTitleAtMaxLength() {
+        when(healthEventService.create(eq(ATHLETE_ID), any(), any(), any(), any(), any()))
+                .thenReturn(sampleSummary());
+        String title = "a".repeat(255);
+
+        given().header("X-API-Key", API_KEY).contentType("application/json")
+                .body("{\"startDate\":\"2025-06-01\",\"type\":\"ILLNESS\",\"title\":\"" + title + "\"}")
+                .when().post("/api/v1/athletes/{id}/health-events", ATHLETE_ID)
+                .then().statusCode(201);
+    }
+
+    @Test
+    void shouldReturn400WhenTitleExceedsMaxLength() {
+        String title = "a".repeat(256);
+
+        given().header("X-API-Key", API_KEY).contentType("application/json")
+                .body("{\"startDate\":\"2025-06-01\",\"type\":\"ILLNESS\",\"title\":\"" + title + "\"}")
+                .when().post("/api/v1/athletes/{id}/health-events", ATHLETE_ID)
+                .then().statusCode(400)
+                .body("error", is("'title' must not exceed 255 characters"));
+    }
+
+    @Test
+    void shouldAcceptNotesAtMaxLength() {
+        when(healthEventService.create(eq(ATHLETE_ID), any(), any(), any(), any(), any()))
+                .thenReturn(sampleSummary());
+        String notes = "a".repeat(5000);
+
+        given().header("X-API-Key", API_KEY).contentType("application/json")
+                .body("{\"startDate\":\"2025-06-01\",\"type\":\"ILLNESS\",\"title\":\"Flu\",\"notes\":\""
+                        + notes + "\"}")
+                .when().post("/api/v1/athletes/{id}/health-events", ATHLETE_ID)
+                .then().statusCode(201);
+    }
+
+    @Test
+    void shouldReturn400WhenNotesExceedsMaxLength() {
+        String notes = "a".repeat(5001);
+
+        given().header("X-API-Key", API_KEY).contentType("application/json")
+                .body("{\"startDate\":\"2025-06-01\",\"type\":\"ILLNESS\",\"title\":\"Flu\",\"notes\":\""
+                        + notes + "\"}")
+                .when().post("/api/v1/athletes/{id}/health-events", ATHLETE_ID)
+                .then().statusCode(400)
+                .body("error", is("'notes' must not exceed 5000 characters"));
+    }
 }
