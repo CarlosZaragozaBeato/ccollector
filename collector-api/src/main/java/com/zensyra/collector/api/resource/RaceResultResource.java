@@ -2,6 +2,7 @@ package com.zensyra.collector.api.resource;
 
 import com.zensyra.collector.api.dto.RaceResultDto;
 import com.zensyra.collector.api.dto.RaceResultRequestDto;
+import com.zensyra.collector.journal.JournalFieldLimits;
 import com.zensyra.collector.journal.service.RaceResultService;
 import com.zensyra.collector.query.model.RaceResultSummary;
 import com.zensyra.collector.query.port.RaceResultQueryPort;
@@ -84,6 +85,16 @@ public class RaceResultResource {
         }
         if (request.getRaceName() == null || request.getRaceName().isBlank()) {
             return ApiResponses.error(Response.Status.BAD_REQUEST, "'raceName' is required");
+        }
+        // length() (UTF-16 units) >= code points, so this is conservative vs. the
+        // varchar(255) column — it can never let an over-long value reach the DB.
+        if (request.getRaceName().length() > JournalFieldLimits.SHORT_TEXT_MAX) {
+            return ApiResponses.error(Response.Status.BAD_REQUEST,
+                    "'raceName' must not exceed " + JournalFieldLimits.SHORT_TEXT_MAX + " characters");
+        }
+        if (request.getNotes() != null && request.getNotes().length() > JournalFieldLimits.NOTES_MAX) {
+            return ApiResponses.error(Response.Status.BAD_REQUEST,
+                    "'notes' must not exceed " + JournalFieldLimits.NOTES_MAX + " characters");
         }
         if (request.getDistanceMeters() == null) {
             return ApiResponses.error(Response.Status.BAD_REQUEST, "'distanceMeters' is required");
