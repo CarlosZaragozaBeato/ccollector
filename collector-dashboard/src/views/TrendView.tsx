@@ -123,10 +123,14 @@ export default function TrendView({
   const [races, setRaces] = useState<RaceResultDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Degraded state: training-load loaded but the supplementary race-results
+  // fetch failed. The chart still renders — just without race markers.
+  const [racesUnavailable, setRacesUnavailable] = useState(false)
 
   useEffect(() => {
     setLoading(true)
     setError(null)
+    setRacesUnavailable(false)
 
     const to = new Date()
     const from = new Date()
@@ -134,7 +138,9 @@ export default function TrendView({
     const toStr = to.toISOString().split('T')[0]
     const fromStr = from.toISOString().split('T')[0]
 
-    Promise.all([
+    // allSettled (not all): race-results is supplementary (markers). Its failure
+    // must not blank the primary CTL/ATL/TSB chart, which needs only training-load.
+    Promise.allSettled([
       apiFetch<TrainingLoadResponse>(
         `/api/v1/athletes/${athleteId}/training-load?days=${days}`,
         apiKey
@@ -144,13 +150,26 @@ export default function TrendView({
         apiKey
       ),
     ])
-      .then(([load, raceList]) => {
-        setData(load.items)
-        // Belt-and-suspenders: keep only races inside the visible window
-        // (ISO date strings compare lexicographically = chronologically).
-        setRaces(raceList.filter((r) => r.raceDate >= fromStr && r.raceDate <= toStr))
+      .then(([loadResult, racesResult]) => {
+        // Primary data missing → keep the existing error state (chart cannot render).
+        if (loadResult.status === 'rejected') {
+          const reason = loadResult.reason
+          setError(reason instanceof Error ? reason.message : 'Failed to load training load')
+          return
+        }
+
+        setData(loadResult.value.items)
+
+        if (racesResult.status === 'fulfilled') {
+          // Belt-and-suspenders: keep only races inside the visible window
+          // (ISO date strings compare lexicographically = chronologically).
+          setRaces(racesResult.value.filter((r) => r.raceDate >= fromStr && r.raceDate <= toStr))
+        } else {
+          // Supplementary data failed → render the chart without markers.
+          setRaces([])
+          setRacesUnavailable(true)
+        }
       })
-      .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
   }, [athleteId, apiKey, days])
 
@@ -213,6 +232,11 @@ export default function TrendView({
               <span className="text-sm leading-none">🏁</span> Race
             </span>
           </div>
+          {racesUnavailable && (
+            <p className="text-xs text-gray-400">
+              Race markers unavailable — couldn’t load race results. Showing training load only.
+            </p>
+          )}
           <ResponsiveContainer width="100%" height={360}>
             <ComposedChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
