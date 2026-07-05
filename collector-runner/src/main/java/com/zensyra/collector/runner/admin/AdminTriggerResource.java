@@ -2,6 +2,7 @@ package com.zensyra.collector.runner.admin;
 
 import com.zensyra.collector.core.sync.DataCollector;
 import com.zensyra.collector.core.sync.SyncJobRecordRepository;
+import com.zensyra.collector.runner.scheduling.JobConcurrencyGuard;
 import com.zensyra.collector.runner.scheduling.JobRegistry;
 import com.zensyra.collector.runner.scheduling.SyncJobExecutor;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -42,6 +43,9 @@ public class AdminTriggerResource {
     SyncJobExecutor syncJobExecutor;
 
     @Inject
+    JobConcurrencyGuard jobConcurrencyGuard;
+
+    @Inject
     SyncJobRecordRepository syncJobRecordRepository;
 
     private Response authenticate(String token) {
@@ -68,6 +72,16 @@ public class AdminTriggerResource {
         for (DataCollector collector : collectors) {
             for (var job : collector.jobs()) {
                 if (job.jobId().equals(jobId)) {
+                    // Per-jobId mutual exclusion: reject a concurrent trigger of the
+                    // SAME job with 409 rather than letting two runs race on the
+                    // shared SyncJobRecord. Execution is synchronous, so the guard is
+                    // held for the whole job and released when this handler unwinds.
+                    if (!jobConcurrencyGuard.tryAcquire(jobId)) {
+                        LOG.warnf("AdminTriggerResource: job '%s' is already running — rejecting trigger", jobId);
+                        return Response.status(Response.Status.CONFLICT)
+                                .entity(Map.of("error", "job '" + jobId + "' is already running"))
+                                .build();
+                    }
                     LOG.infof("AdminTriggerResource: disparando job '%s' manualmente", jobId);
                     try {
                         syncJobExecutor.execute(job);
@@ -76,6 +90,8 @@ public class AdminTriggerResource {
                         return Response.serverError()
                                 .entity(Map.of("error", "job execution failed", "job", jobId))
                                 .build();
+                    } finally {
+                        jobConcurrencyGuard.release(jobId);
                     }
                     return Response.ok(
                             Map.of("triggered", jobId, "at", Instant.now().toString())
