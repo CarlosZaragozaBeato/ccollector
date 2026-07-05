@@ -72,7 +72,9 @@ public class StravaTokenRefresher implements TokenRefresher {
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
         if (response.statusCode() != 200) {
-            LOG.errorf("Strava token refresh failed — HTTP %d: %s", response.statusCode(), response.body());
+            // Log only the status code — never the raw external response body, which
+            // is unnecessary exposure of an upstream payload we don't control.
+            LOG.errorf("Strava token refresh failed with status %d", response.statusCode());
             throw new TokenRefreshException(
                     "Strava token refresh failed — HTTP %d".formatted(response.statusCode())
             );
