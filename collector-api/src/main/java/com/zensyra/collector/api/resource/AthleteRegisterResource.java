@@ -80,6 +80,11 @@ public class AthleteRegisterResource {
                     .build();
 
         } catch (StravaOAuthExchangeException e) {
+            // StravaOAuthService builds this message from the HTTP status code and a
+            // generic description only — never the raw Strava response body — so
+            // reflecting it into the 502 body cannot leak the upstream payload.
+            // The message still carries the status code, enough to diagnose the
+            // failure. 502 stays 502; only the body content is affected.
             return ApiResponses.error(Response.Status.BAD_GATEWAY, e.getMessage());
         }
     }
