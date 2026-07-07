@@ -1,10 +1,13 @@
 package com.zensyra.collector.query.composer;
 
+import com.zensyra.collector.query.model.PreRaceSubjectiveState;
 import com.zensyra.collector.query.model.RacePerformanceContext;
 import com.zensyra.collector.query.model.RaceResultSummary;
+import com.zensyra.collector.query.model.TrainingDaySummary;
 import com.zensyra.collector.query.model.TrainingLoad;
 import com.zensyra.collector.query.model.TrainingLoadPoint;
 import com.zensyra.collector.query.port.RaceResultQueryPort;
+import com.zensyra.collector.query.port.TrainingDayQueryPort;
 import com.zensyra.collector.query.port.TrainingLoadQueryPort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -14,8 +17,11 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalDouble;
 import java.util.UUID;
 
 /**
@@ -53,6 +59,16 @@ public class RacePerformanceComposer {
     /** Chronic fitness look-back — mirrors the CTL time constant (α = 1/42). */
     static final int CHRONIC_LOOKBACK_DAYS = 42;
     /**
+     * Aggregation window for the pre-race subjective-state signal: the diary
+     * entries in the 7 days immediately before race day. Deliberately equal to
+     * {@link #SHORT_TERM_LOOKBACK_DAYS} so "how I felt" and "my acute load (ATL)"
+     * describe the <em>same</em> taper week and are directly comparable. Diary
+     * data is sparse, so a narrower final-taper window (3–4 days) would usually
+     * be empty; 7 days maximises the chance of capturing any entry while still
+     * meaning "the week leading into the race".
+     */
+    static final int SUBJECTIVE_LOOKBACK_DAYS = SHORT_TERM_LOOKBACK_DAYS;
+    /**
      * How far from a target date the nearest daily row may be and still be used.
      * Rows exist mainly on activity days, so short rest gaps are normal; CTL
      * barely moves over 3 days and ATL's drift stays acceptable. Beyond this the
@@ -62,13 +78,16 @@ public class RacePerformanceComposer {
 
     private final Instance<RaceResultQueryPort> raceResultPorts;
     private final Instance<TrainingLoadQueryPort> trainingLoadPorts;
+    private final Instance<TrainingDayQueryPort> trainingDayPorts;
 
     @Inject
     public RacePerformanceComposer(
             Instance<RaceResultQueryPort> raceResultPorts,
-            Instance<TrainingLoadQueryPort> trainingLoadPorts) {
+            Instance<TrainingLoadQueryPort> trainingLoadPorts,
+            Instance<TrainingDayQueryPort> trainingDayPorts) {
         this.raceResultPorts = raceResultPorts;
         this.trainingLoadPorts = trainingLoadPorts;
+        this.trainingDayPorts = trainingDayPorts;
     }
 
     /**
@@ -101,21 +120,107 @@ public class RacePerformanceComposer {
             }
         }
 
+        // Diary entries for the subjective signal, fetched once over the whole
+        // span any race window can reach — earliest race minus the look-back, up
+        // to the query's upper bound — then sliced per race in memory (same
+        // fetch-once, avoid-N+1 approach as the training load above).
+        LocalDate diaryFrom = earliestRace.minusDays(SUBJECTIVE_LOOKBACK_DAYS);
+        Map<LocalDate, TrainingDaySummary> diaryByDate = new HashMap<>();
+        for (TrainingDayQueryPort port : trainingDayPorts) {
+            for (TrainingDaySummary day : port.findByAthlete(athleteId, diaryFrom, to)) {
+                // At most one TrainingDay per (athlete, date); deterministic on
+                // the (unexpected) collision, matching the load handling above.
+                diaryByDate.putIfAbsent(day.date(), day);
+            }
+        }
+
         return races.stream()
                 .sorted(Comparator.comparing(RaceResultSummary::raceDate).reversed()
                         .thenComparing(RaceResultSummary::id))
-                .map(race -> toContext(race, loadByDate))
+                .map(race -> toContext(race, loadByDate, diaryByDate))
                 .toList();
     }
 
-    private RacePerformanceContext toContext(RaceResultSummary race, Map<LocalDate, TrainingLoad> loadByDate) {
+    private RacePerformanceContext toContext(RaceResultSummary race,
+                                             Map<LocalDate, TrainingLoad> loadByDate,
+                                             Map<LocalDate, TrainingDaySummary> diaryByDate) {
         LocalDate raceDate = race.raceDate();
         return new RacePerformanceContext(
                 race,
                 sampleAt(loadByDate, raceDate),
                 sampleAt(loadByDate, raceDate.minusDays(SHORT_TERM_LOOKBACK_DAYS)),
-                sampleAt(loadByDate, raceDate.minusDays(CHRONIC_LOOKBACK_DAYS))
+                sampleAt(loadByDate, raceDate.minusDays(CHRONIC_LOOKBACK_DAYS)),
+                summarizeSubjective(raceDate, diaryByDate)
         );
+    }
+
+    /**
+     * Aggregates the diary entries in {@code [raceDate − SUBJECTIVE_LOOKBACK_DAYS,
+     * raceDate − 1]} (the taper week, excluding race day — a race-day RPE reflects
+     * the race effort itself, not pre-race readiness) into one
+     * {@link PreRaceSubjectiveState}. Returns an explicit "unavailable" value when
+     * no usable entry exists, never a substituted neutral/zero.
+     */
+    private PreRaceSubjectiveState summarizeSubjective(LocalDate raceDate,
+                                                       Map<LocalDate, TrainingDaySummary> diaryByDate) {
+        List<TrainingDaySummary> window = new ArrayList<>();
+        for (int daysBefore = 1; daysBefore <= SUBJECTIVE_LOOKBACK_DAYS; daysBefore++) {
+            TrainingDaySummary day = diaryByDate.get(raceDate.minusDays(daysBefore));
+            if (day != null) {
+                window.add(day);
+            }
+        }
+
+        // Average RPE over the non-null values only (sRPE convention). A day with
+        // no RPE recorded simply doesn't contribute to the mean.
+        OptionalDouble avgRpe = window.stream()
+                .map(TrainingDaySummary::perceivedEffort)
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .average();
+        Double averagePerceivedEffort = avgRpe.isPresent() ? avgRpe.getAsDouble() : null;
+
+        String dominantState = dominantSubjectiveState(window);
+
+        // Usable signal = at least one non-null metric across the window. Entries
+        // that recorded neither RPE nor state (e.g. only notes/weight) contribute
+        // no subjective signal, so the window reads as unavailable.
+        int usableEntries = (int) window.stream()
+                .filter(d -> d.perceivedEffort() != null || d.subjectiveState() != null)
+                .count();
+        if (usableEntries == 0) {
+            return PreRaceSubjectiveState.unavailable();
+        }
+        return new PreRaceSubjectiveState(usableEntries, averagePerceivedEffort, dominantState, true);
+    }
+
+    /**
+     * Most frequently reported subjective state in the window, ignoring null
+     * states. Ties are broken by the <em>most recent</em> entry: a report closer
+     * to race day is a more relevant readiness signal than one further out. Returns
+     * {@code null} when no entry recorded a state.
+     */
+    private String dominantSubjectiveState(List<TrainingDaySummary> window) {
+        // Iterating in ascending date order means a later entry overwrites an
+        // earlier one at equal count, implementing the "most recent wins on tie"
+        // rule; the insertion-ordered map keeps the scan deterministic.
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        Map<String, LocalDate> lastSeen = new LinkedHashMap<>();
+        window.stream()
+                .filter(d -> d.subjectiveState() != null)
+                .sorted(Comparator.comparing(TrainingDaySummary::date))
+                .forEach(d -> {
+                    counts.merge(d.subjectiveState(), 1, Integer::sum);
+                    lastSeen.put(d.subjectiveState(), d.date());
+                });
+        if (counts.isEmpty()) {
+            return null;
+        }
+        return counts.entrySet().stream()
+                .max(Comparator.<Map.Entry<String, Integer>>comparingInt(Map.Entry::getValue)
+                        .thenComparing(e -> lastSeen.get(e.getKey())))
+                .map(Map.Entry::getKey)
+                .orElseThrow(); // non-empty, checked above
     }
 
     /**
