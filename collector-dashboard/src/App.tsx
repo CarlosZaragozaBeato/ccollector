@@ -4,14 +4,16 @@ import TrendView from './views/TrendView'
 import WeeklyLoadView from './views/WeeklyLoadView'
 import ActivitiesView from './views/ActivitiesView'
 import DiaryView from './views/DiaryView'
+import InsightsView from './views/InsightsView'
 
-type Tab = 'trend' | 'weekly' | 'activities' | 'diary'
+type Tab = 'trend' | 'weekly' | 'activities' | 'diary' | 'insights'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'trend', label: 'Fitness Trends' },
   { id: 'weekly', label: 'Weekly Load' },
   { id: 'activities', label: 'Recent Activities' },
   { id: 'diary', label: 'Diary' },
+  { id: 'insights', label: 'Insights' },
 ]
 
 export default function App() {
@@ -116,6 +118,9 @@ mvn package -DskipTests`}
               )}
               {activeTab === 'diary' && (
                 <DiaryView athleteId={config.athleteId} apiKey={config.apiKey} />
+              )}
+              {activeTab === 'insights' && (
+                <InsightsView athleteId={config.athleteId} apiKey={config.apiKey} />
               )}
             </div>
           </main>
