@@ -7,22 +7,29 @@ package com.zensyra.collector.query.model;
  * fitness). Closes UC-1 (PMC taper analysis) from
  * {@code docs/design/003-extended-domain-model.md §3}.
  *
- * <p>This is a provider-neutral composition of two sources — the race comes from
- * the journal, the load snapshots from the training-load model — assembled by
- * {@code RacePerformanceComposer}. Each {@link TrainingLoadPoint} independently
- * flags whether its data was actually available, so a race with sync gaps (or no
- * training-load history at all) yields a well-formed context with explicit
- * "insufficient data" points rather than throwing or inventing numbers.
+ * <p>This is a provider-neutral composition of three sources — the race comes
+ * from the journal, the load snapshots from the training-load model, and the
+ * pre-race subjective state from the {@code TrainingDay} diary (also the
+ * journal) — assembled by {@code RacePerformanceComposer}. Each
+ * {@link TrainingLoadPoint} independently flags whether its data was actually
+ * available, so a race with sync gaps (or no training-load history at all) yields
+ * a well-formed context with explicit "insufficient data" points rather than
+ * throwing or inventing numbers. {@link #preRaceSubjectiveState} follows the same
+ * explicit-gap contract for the (usually absent) diary signal.
  *
- * @param race            the race result (embeds {@link RaceResultSummary} verbatim)
- * @param atRaceDate      CTL/ATL/TSB on race day
- * @param at7DaysBefore   CTL/ATL/TSB 7 days before the race (short-term fatigue)
- * @param at42DaysBefore  CTL/ATL/TSB 42 days before the race (chronic fitness)
+ * @param race                   the race result (embeds {@link RaceResultSummary} verbatim)
+ * @param atRaceDate             CTL/ATL/TSB on race day
+ * @param at7DaysBefore          CTL/ATL/TSB 7 days before the race (short-term fatigue)
+ * @param at42DaysBefore         CTL/ATL/TSB 42 days before the race (chronic fitness)
+ * @param preRaceSubjectiveState aggregate of the diary entries in the 7 days
+ *                               before the race (RPE + subjective state); a
+ *                               well-formed "unavailable" value when none exist
  */
 public record RacePerformanceContext(
         RaceResultSummary race,
         TrainingLoadPoint atRaceDate,
         TrainingLoadPoint at7DaysBefore,
-        TrainingLoadPoint at42DaysBefore
+        TrainingLoadPoint at42DaysBefore,
+        PreRaceSubjectiveState preRaceSubjectiveState
 ) {
 }

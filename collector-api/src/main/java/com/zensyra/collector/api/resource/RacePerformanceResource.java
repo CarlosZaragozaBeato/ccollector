@@ -39,6 +39,9 @@ public class RacePerformanceResource {
                     + "carries an `available` flag: when a daily training-load row exists within 3 days of the "
                     + "target date it is used (`actualDate` shows the row actually sampled), otherwise the point "
                     + "is reported as unavailable with null metrics rather than a substituted value. "
+                    + "Also includes `preRaceSubjectiveState`: an aggregate of the training diary in the 7 days "
+                    + "before the race (average perceived effort and the dominant subjective state), carrying its "
+                    + "own `available` flag — usually unavailable, since diary data is optional and sparse. "
                     + "Races are returned newest first. An athlete with no races in the window yields an empty list. "
                     + "Defaults: `from` = 12 months ago, `to` = today.")
     public Response list(
