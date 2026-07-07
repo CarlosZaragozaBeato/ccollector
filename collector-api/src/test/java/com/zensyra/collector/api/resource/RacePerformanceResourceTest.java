@@ -1,6 +1,7 @@
 package com.zensyra.collector.api.resource;
 
 import com.zensyra.collector.query.composer.RacePerformanceComposer;
+import com.zensyra.collector.query.model.PreRaceSubjectiveState;
 import com.zensyra.collector.query.model.RacePerformanceContext;
 import com.zensyra.collector.query.model.RaceResultSummary;
 import com.zensyra.collector.query.model.TrainingLoadPoint;
@@ -45,7 +46,9 @@ class RacePerformanceResourceTest {
         // 42-day point has no row within tolerance — explicit "insufficient data".
         TrainingLoadPoint at42 = new TrainingLoadPoint(
                 LocalDate.of(2025, 3, 16), null, null, null, null, false);
-        return new RacePerformanceContext(race, atRaceDate, at7, at42);
+        // Diary entries recorded in the taper week: avg RPE 4.5, dominant "GOOD".
+        PreRaceSubjectiveState subjective = new PreRaceSubjectiveState(2, 4.5, "GOOD", true);
+        return new RacePerformanceContext(race, atRaceDate, at7, at42, subjective);
     }
 
     @Test
@@ -68,7 +71,12 @@ class RacePerformanceResourceTest {
                 // gap is explicit: unavailable point serializes null metrics, not 0
                 .body("[0].at42DaysBefore.available", is(false))
                 .body("[0].at42DaysBefore.ctl", is(nullValue()))
-                .body("[0].at42DaysBefore.actualDate", is(nullValue()));
+                .body("[0].at42DaysBefore.actualDate", is(nullValue()))
+                // additive pre-race subjective-state aggregate
+                .body("[0].preRaceSubjectiveState.available", is(true))
+                .body("[0].preRaceSubjectiveState.entryCount", is(2))
+                .body("[0].preRaceSubjectiveState.averagePerceivedEffort", is(4.5f))
+                .body("[0].preRaceSubjectiveState.dominantSubjectiveState", is("GOOD"));
     }
 
     @Test
