@@ -8,7 +8,11 @@ import java.util.Optional;
 
 @ApplicationScoped
 public class IntegrationCredentialRepository implements PanacheRepositoryBase<IntegrationCredential, Long> {
-    public Optional<IntegrationCredential> findBySource(IntegrationSource source){
+    public Optional<IntegrationCredential> findBySource(IntegrationSource source) {
         return find("source", source).firstResultOptional();
+    }
+
+    public void deleteBySource(IntegrationSource source) {
+        delete("source", source);
     }
 }
