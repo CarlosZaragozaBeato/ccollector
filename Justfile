@@ -4,9 +4,10 @@ set shell := ["bash", "-c"]
 
 # ── Setup ────────────────────────────────────────────────────────────────────
 
-# Generate .env with auto-generated secrets and sync config.json (safe to re-run)
-setup:
-    bash scripts/bootstrap-env.sh
+# Seed Strava credentials into the database via POST /admin/credentials/strava
+# Run AFTER: just setup && docker compose up --build
+seed:
+    bash scripts/seed-strava-credentials.sh
 
 # ── Dev ──────────────────────────────────────────────────────────────────────
 dev:
