@@ -2,6 +2,12 @@
 # Usage: just <task>
 set shell := ["bash", "-c"]
 
+# ── Setup ────────────────────────────────────────────────────────────────────
+
+# Generate .env with auto-generated secrets and sync config.json (safe to re-run)
+setup:
+    bash scripts/bootstrap-env.sh
+
 # ── Dev ──────────────────────────────────────────────────────────────────────
 dev:
     mkdir -p collector-core/target/classes collector-strava/target/classes
