@@ -20,19 +20,26 @@ The DB schema is created automatically by Liquibase on first boot — no manual 
 git clone https://github.com/CarlosZaragozaBeato/ccollector.git
 cd ccollector
 
-# 2. Configure secrets
-cp .env.example .env
-# Edit .env — fill in DB_USERNAME, DB_PASSWORD, COLLECTOR_API_KEY, ADMIN_TOKEN
-# and generate an encryption key:
-#   openssl rand -base64 32   → paste into COLLECTOR_ENCRYPTION_KEY
+# 2. Create a Strava API application at https://www.strava.com/settings/api
+#    Note the Client ID (a number) and Client Secret shown on that page —
+#    you need them in the next step.
+#    See "Connect Your Strava Account → Step 1" below for the full walkthrough.
 
-# 3. Configure the dashboard (use placeholder athleteId for now — see note below)
-cp collector-dashboard/public/config.json.example \
-   collector-dashboard/public/config.json
-# Edit config.json and set "apiKey" to the value of COLLECTOR_API_KEY in .env
+# 3. Generate .env and config.json with all auto-generated secrets
+STRAVA_CLIENT_ID=<your-client-id> STRAVA_CLIENT_SECRET=<your-client-secret> \
+  bash scripts/bootstrap-env.sh
+# Interactive alternative (prompts for Strava credentials):
+#   bash scripts/bootstrap-env.sh
+# With just:
+#   just setup
 
 # 4. Build and start
 docker compose up --build
+
+# 5. Seed Strava credentials into the database
+#    (the script waits for the app to be ready, then calls the admin API)
+bash scripts/seed-strava-credentials.sh
+# With just:   just seed
 ```
 
 Open **http://localhost:8080/dashboard/** once the stack is running.
@@ -41,14 +48,14 @@ Swagger UI is at **http://localhost:8080/q/swagger-ui**.
 > **Dashboard athleteId — two-step process.**
 > `config.json` is baked into the JAR at build time, so the dashboard shows a
 > placeholder UUID until you rebuild after Strava registration.
+> `apiKey` is written automatically by `bootstrap-env.sh` — no manual editing needed.
 >
 > **Step A — First run:** leave `athleteId` as the placeholder and complete the
-> Strava setup below (create API app → seed credentials → authorize athlete →
-> register). The `POST /api/v1/athletes/register` response contains your real
-> `athleteId`.
+> Strava setup below (seed credentials → authorize athlete → register).
+> The `POST /api/v1/athletes/register` response contains your real `athleteId`.
 >
 > **Step B — After registration:** edit `collector-dashboard/public/config.json`
-> with your real `athleteId`, then run:
+> and set `athleteId` to the UUID from the register response, then run:
 > ```bash
 > docker compose up --build
 > ```
@@ -264,56 +271,24 @@ Strava API application before registering an athlete.
    - **Website**: any valid URL, e.g. `http://localhost`.
    - **Authorization Callback Domain**: for local development use `localhost`. For a deployed instance use your domain, e.g. `collector.yourdomain.com`.
 4. Click **Create** (or **Update** if the app already exists).
-5. Note the **Client ID** (a number) and the **Client Secret** (a long hex string) shown on the page. You will need both in Step 3.
+5. Note the **Client ID** (a number) and the **Client Secret** (a long hex string) shown on the page. You will need both for the bootstrap script (Quick Start step 3) and for Step 2 below.
 
-### Step 2 — Start the application
+### Step 2 — Seed Strava credentials into the database
 
-> **Using docker-compose?** The app is already running after `docker compose up --build`.
-> Skip straight to Step 3.
-
-Ensure your `.env.local` is complete and start the app:
+With the stack running, load the Client ID and Secret into the database through
+the admin API. The script waits for the app to be ready automatically:
 
 ```bash
-ENV_FILE=.env.local just dev
-# or:
-set -a && source .env.local && set +a
-mise exec -- ./mvnw quarkus:dev -pl collector-runner -am
+bash scripts/seed-strava-credentials.sh
+# or: just seed
 ```
 
-Wait until the health endpoint returns `UP`:
+The script reads `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, and `ADMIN_TOKEN`
+from `.env` (written there by `bootstrap-env.sh`) and calls
+`POST /admin/credentials/strava`, which stores the secret encrypted with
+AES-256-GCM. It is safe to re-run if credentials change.
 
-```bash
-curl -s http://localhost:8080/q/health/ready | jq .status
-```
-
-### Step 3 — Seed the Strava credentials into the database
-
-The Client ID and Secret are stored in the `integration_credentials` table,
-encrypted at rest with `COLLECTOR_ENCRYPTION_KEY`. Insert them via psql:
-
-```bash
-# docker-compose: connect to the db container
-docker compose exec db psql -U <DB_USERNAME> -d collector
-# local install: connect to your PostgreSQL instance as usual
-```
-
-```sql
--- Then run:
-INSERT INTO integration_credentials (source, client_id, client_secret)
-VALUES ('STRAVA', '<your-client-id>', '<your-client-secret>');
-```
-
-> The `client_secret` column is encrypted by the application layer using
-> AES-256-GCM. The plain-text value you insert here is encrypted on the
-> first write and is never stored in clear text.
-
-Verify the row was created:
-
-```sql
-SELECT id, source, client_id FROM integration_credentials WHERE source = 'STRAVA';
-```
-
-### Step 4 — Authorize the athlete account
+### Step 3 — Authorize the athlete account
 
 Build the Strava authorization URL and open it in a browser. Replace
 `<client-id>` with your numeric Client ID and `<redirect-uri>` with a URI
@@ -346,10 +321,10 @@ http://localhost/callback?state=&code=abc123xyz&scope=read,activity:read_all,pro
 
 Copy the value of `code` from the address bar.
 
-### Step 5 — Register the athlete
+### Step 4 — Register the athlete
 
 Call the register endpoint with the code and the same redirect URI you used in
-Step 4:
+Step 3:
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/athletes/register \
@@ -374,7 +349,7 @@ A successful response looks like:
 The athlete's OAuth tokens are now stored, encrypted, in the `oauth_tokens`
 table. The app will refresh them automatically before they expire.
 
-### Step 6 — Trigger the initial sync
+### Step 5 — Trigger the initial sync
 
 Jobs run on the Quartz schedule automatically, but you can also trigger them
 immediately through the admin endpoint:
@@ -419,6 +394,19 @@ restart: `docker compose down -v && docker compose up --build`.
 run `docker compose up --build` (the `--build` flag is required — without it Docker
 reuses the cached image and the old config.json stays baked in).
 
+**`seed-strava-credentials.sh` times out waiting for the app**
+The script polls `/q/health/ready` for up to 5 minutes. If it times out, the app
+has not started successfully. Run `docker compose logs app` to inspect errors,
+confirm `docker compose up --build` has fully finished, and verify `HTTP_PORT`
+in `.env` matches the port the app is bound to.
+
+**`seed-strava-credentials.sh` exits with 401 or 503**
+A 401 means the `ADMIN_TOKEN` in `.env` does not match the value the running app
+loaded at startup. Stop and restart the stack (`docker compose down && docker compose up --build`)
+so the app picks up the current `.env`. A 503 means the app started without
+`ADMIN_TOKEN` configured at all — re-run `bootstrap-env.sh` to generate the
+missing value, then restart.
+
 **Port 8080 already in use**
 Set `HTTP_PORT=<other-port>` in `.env` (e.g. `HTTP_PORT=8090`) and restart.
 
@@ -443,4 +431,3 @@ What it does not do yet:
 - Add Strava webhook ingestion for lower-latency activity updates.
 - Replace hard-coded job cron expressions with environment-driven scheduling.
 - Expand derived metrics beyond the current training-load and normalized-power calculations.
-- Add clearer bootstrap tooling for credentials and first-athlete registration.
