@@ -11,27 +11,21 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Path("/admin")
 @ApplicationScoped
+@AdminTokenAuth
 @Produces(MediaType.APPLICATION_JSON)
 public class AdminTriggerResource {
 
     private static final Logger LOG = Logger.getLogger(AdminTriggerResource.class);
-
-    @ConfigProperty(name = "admin.token")
-    Optional<String> adminToken;
 
     @Inject
     Instance<DataCollector> collectors;
@@ -48,27 +42,9 @@ public class AdminTriggerResource {
     @Inject
     SyncJobRecordRepository syncJobRecordRepository;
 
-    private Response authenticate(String token) {
-        if (adminToken.isEmpty() || adminToken.get().isBlank()) {
-            return Response.status(503).entity(Map.of("error", "admin endpoint not configured")).build();
-        }
-        if (token == null || !MessageDigest.isEqual(
-                adminToken.get().getBytes(StandardCharsets.UTF_8),
-                token.getBytes(StandardCharsets.UTF_8))) {
-            return Response.status(401).entity(Map.of("error", "unauthorized")).build();
-        }
-        return null;
-    }
-
     @POST
     @Path("/trigger/{jobId}")
-    public Response triggerJob(
-            @HeaderParam("X-Admin-Token") String token,
-            @PathParam("jobId") String jobId) {
-
-        Response authError = authenticate(token);
-        if (authError != null) return authError;
-
+    public Response triggerJob(@PathParam("jobId") String jobId) {
         for (DataCollector collector : collectors) {
             for (var job : collector.jobs()) {
                 if (job.jobId().equals(jobId)) {
@@ -104,10 +80,7 @@ public class AdminTriggerResource {
 
     @GET
     @Path("/jobs")
-    public Response listJobs(@HeaderParam("X-Admin-Token") String token) {
-        Response authError = authenticate(token);
-        if (authError != null) return authError;
-
+    public Response listJobs() {
         List<Map<String, Object>> jobs = new ArrayList<>();
         for (DataCollector collector : collectors) {
             for (var job : collector.jobs()) {
