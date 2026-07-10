@@ -8,6 +8,7 @@ import com.zensyra.collector.core.sync.IntegrationSource;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.net.URI;
@@ -22,6 +23,8 @@ import java.util.List;
 
 @ApplicationScoped
 public class StravaOAuthService {
+
+    private static final Logger LOG = Logger.getLogger(StravaOAuthService.class);
 
     @ConfigProperty(name = "strava.oauth.token-url",
             defaultValue = "https://www.strava.com/oauth/token")
@@ -64,9 +67,14 @@ public class StravaOAuthService {
         }
 
         if (response.statusCode() != 200) {
+            // Log only the status code — never the raw external response body, which
+            // is unnecessary exposure of an upstream payload we don't control (same
+            // approach as #39's fix in StravaTokenRefresher). The exception message
+            // is reflected to the API caller by AthleteRegisterResource, so it must
+            // stay body-free too.
+            LOG.errorf("Strava OAuth exchange failed with status %d", response.statusCode());
             throw new StravaOAuthExchangeException(
-                    "Strava OAuth exchange failed — HTTP %d: %s"
-                            .formatted(response.statusCode(), response.body())
+                    "Strava OAuth exchange failed — HTTP %d".formatted(response.statusCode())
             );
         }
 

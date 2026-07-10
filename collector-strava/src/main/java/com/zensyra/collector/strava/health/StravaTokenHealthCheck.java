@@ -13,11 +13,12 @@ import org.eclipse.microprofile.health.Readiness;
 import java.util.List;
 
 /**
- * Readiness check that verifies at least one Strava OAuth token
- * exists.  Expired access tokens are still usable because
- * {@code OAuthTokenService} refreshes them on demand using the
- * refresh token, which is always present (NOT NULL in schema).
- * The system can only not sync when there are no tokens at all.
+ * Readiness check that reports Strava OAuth token state as observability
+ * data. Always returns UP so a fresh install (zero tokens before OAuth
+ * completion) does not block readiness — the app is ready to accept
+ * credential-seeding and registration requests even before any athlete
+ * has been registered. Token absence is a configuration state, not a
+ * process failure; the database health check already covers unreachable DB.
  */
 @Readiness
 @ApplicationScoped
@@ -63,7 +64,7 @@ public final class StravaTokenHealthCheck implements HealthCheck {
             .withData("total", total)
             .withData("fresh", fresh)
             .withData("needsRefresh", needsRefresh)
-            .status(total > 0)
+            .up()
             .build();
     }
 }
