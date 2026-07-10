@@ -2,6 +2,13 @@
 # Usage: just <task>
 set shell := ["bash", "-c"]
 
+# ── Setup ────────────────────────────────────────────────────────────────────
+
+# Seed Strava credentials into the database via POST /admin/credentials/strava
+# Run AFTER: just setup && docker compose up --build
+seed:
+    bash scripts/seed-strava-credentials.sh
+
 # ── Dev ──────────────────────────────────────────────────────────────────────
 dev:
     mkdir -p collector-core/target/classes collector-strava/target/classes
