@@ -36,7 +36,7 @@ public class StravaOAuthService {
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public StravaOAuthToken exchangeAuthorizationCode(String code, String redirectUri) {
+    public StravaOAuthToken exchangeAuthorizationCode(String code, String redirectUri, String scope) {
         IntegrationCredential credential = credentialRepository
                 .findBySource(IntegrationSource.STRAVA)
                 .orElseThrow(() -> new StravaOAuthExchangeException(
@@ -86,11 +86,16 @@ public class StravaOAuthService {
                 throw new StravaOAuthExchangeException("Strava OAuth response missing athlete.id");
             }
 
+            // Strava's token-exchange response has no `scope` field — the granted
+            // scope arrives on the authorization redirect and is passed in by the
+            // caller. We echo it onto the result so the token carries what it is
+            // authorized for; null when the caller did not forward it.
             return new StravaOAuthToken(
                     athleteIdNode.asText(),
                     json.get("access_token").asText(),
                     json.get("refresh_token").asText(),
-                    Instant.ofEpochSecond(json.get("expires_at").asLong())
+                    Instant.ofEpochSecond(json.get("expires_at").asLong()),
+                    scope
             );
         } catch (IOException e) {
             throw new StravaOAuthExchangeException("Could not parse the Strava OAuth response", e);

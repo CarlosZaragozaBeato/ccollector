@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 039-add-scope-to-oauth-tokens
+      author: zensyra
+      comment: >
+        Records the OAuth scope granted for a stored token. Strava does not
+        return scope in the token-exchange response body — it is delivered as
+        the `scope` query parameter on the authorization redirect and forwarded
+        by the client on POST /api/v1/athletes/register. Nullable: pre-existing
+        tokens (and any client that does not forward the scope) leave it null.
+        Purpose is diagnostic visibility — an insufficient (e.g. read-only)
+        grant is now recorded instead of only surfacing as a 403 deep in a sync.
+      changes:
+        - addColumn:
+            tableName: oauth_tokens
+            columns:
+              - column:
+                  name: scope
+                  type: VARCHAR(255)
+      rollback:
+        - dropColumn:
+            tableName: oauth_tokens
+            columnName: scope

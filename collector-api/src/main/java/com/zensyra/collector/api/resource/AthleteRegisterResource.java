@@ -41,7 +41,7 @@ public class AthleteRegisterResource {
     public Response register(@Valid AthleteRegisterRequestDto request) {
         try {
             StravaOAuthToken stravaToken = stravaOAuthService
-                    .exchangeAuthorizationCode(request.getCode(), request.getRedirectUri());
+                    .exchangeAuthorizationCode(request.getCode(), request.getRedirectUri(), request.getScope());
 
             IntegrationAccount integrationAccount = athleteIdentityService.resolveOrCreateAccount(
                     IntegrationSource.STRAVA,
@@ -63,6 +63,7 @@ public class AthleteRegisterResource {
             token.setAccessToken(stravaToken.accessToken());
             token.setRefreshToken(stravaToken.refreshToken());
             token.setExpiresAt(stravaToken.expiresAt());
+            token.setScope(stravaToken.scope());
 
             if (created) {
                 tokenRepository.persist(token);

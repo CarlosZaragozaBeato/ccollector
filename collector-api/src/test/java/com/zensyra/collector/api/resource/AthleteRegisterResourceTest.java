@@ -53,12 +53,13 @@ class AthleteRegisterResourceTest {
     @Test
     void shouldCreateTokenWhenAthleteRegistersFirstTime() {
         Instant expiresAt = Instant.parse("2026-04-03T14:00:00Z");
-        when(stravaOAuthService.exchangeAuthorizationCode(eq("oauth-code-1"), eq("https://app.example/callback")))
+        when(stravaOAuthService.exchangeAuthorizationCode(eq("oauth-code-1"), eq("https://app.example/callback"), eq(null)))
                 .thenReturn(new StravaOAuthToken(
                         ATHLETE_ID,
                         "access-1",
                         "refresh-1",
-                        expiresAt
+                        expiresAt,
+                        null
                 ));
 
         String responseAthleteId = given()
@@ -94,6 +95,44 @@ class AthleteRegisterResourceTest {
     }
 
     @Test
+    void shouldCaptureAndPersistScopeFromRegisterRequest() {
+        Instant expiresAt = Instant.parse("2026-04-03T14:00:00Z");
+        String grantedScope = "read,activity:read_all,profile:read_all";
+
+        // The eq(grantedScope) matcher on the third argument asserts the resource
+        // actually threads the request's scope into the exchange; if it passed the
+        // wrong value the stub would not match and the call would return null.
+        when(stravaOAuthService.exchangeAuthorizationCode(
+                eq("oauth-code-scope"), eq("https://app.example/callback"), eq(grantedScope)))
+                .thenReturn(new StravaOAuthToken(
+                        ATHLETE_ID,
+                        "access-scope",
+                        "refresh-scope",
+                        expiresAt,
+                        grantedScope
+                ));
+
+        given()
+                .header("X-API-Key", API_KEY)
+                .contentType("application/json")
+                .body("""
+                        {
+                          "code": "oauth-code-scope",
+                          "redirectUri": "https://app.example/callback",
+                          "scope": "read,activity:read_all,profile:read_all"
+                        }
+                        """)
+                .when()
+                .post("/api/v1/athletes/register")
+                .then()
+                .statusCode(201)
+                .body("created", is(true));
+
+        OAuthToken saved = tokenRepository.findBySourceAndUser(IntegrationSource.STRAVA, ATHLETE_ID).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(grantedScope, saved.getScope());
+    }
+
+    @Test
     void shouldUpdateExistingAthleteTokenWhenReRegistering() {
         OAuthToken existing = new OAuthToken();
         existing.setSource(IntegrationSource.STRAVA);
@@ -104,12 +143,13 @@ class AthleteRegisterResourceTest {
         QuarkusTransaction.requiringNew().run(() -> tokenRepository.persist(existing));
 
         Instant newExpiry = Instant.parse("2026-04-03T18:00:00Z");
-        when(stravaOAuthService.exchangeAuthorizationCode(eq("oauth-code-2"), eq(null)))
+        when(stravaOAuthService.exchangeAuthorizationCode(eq("oauth-code-2"), eq(null), eq(null)))
                 .thenReturn(new StravaOAuthToken(
                         ATHLETE_ID,
                         "new-access",
                         "new-refresh",
-                        newExpiry
+                        newExpiry,
+                        null
                 ));
 
         String responseAthleteId = given()
@@ -141,7 +181,7 @@ class AthleteRegisterResourceTest {
 
     @Test
     void shouldReturn502WhenStravaOAuthFails() {
-        when(stravaOAuthService.exchangeAuthorizationCode(eq("bad-code"), eq(null)))
+        when(stravaOAuthService.exchangeAuthorizationCode(eq("bad-code"), eq(null), eq(null)))
                 .thenThrow(new StravaOAuthExchangeException("Strava OAuth exchange failed"));
 
         given()
