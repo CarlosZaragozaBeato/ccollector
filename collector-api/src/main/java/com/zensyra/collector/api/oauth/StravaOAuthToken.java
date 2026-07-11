@@ -6,6 +6,7 @@ public record StravaOAuthToken(
         String athleteId,
         String accessToken,
         String refreshToken,
-        Instant expiresAt
+        Instant expiresAt,
+        String scope
 ) {
 }
