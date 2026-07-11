@@ -37,6 +37,13 @@ public class OAuthToken extends PanacheEntityBase {
     @Column(name="expires_at",nullable = false)
     private Instant expiresAt;
 
+    // OAuth scope granted for this token (e.g. "read,activity:read_all"). Nullable:
+    // Strava delivers scope on the authorization redirect, not the token response,
+    // so it is only populated when the client forwards it on register. Not a secret,
+    // hence not encrypted — kept for diagnostic visibility into insufficient grants.
+    @Column(name = "scope")
+    private String scope;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -113,6 +120,14 @@ public class OAuthToken extends PanacheEntityBase {
 
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public String getScope() {
+        return scope;
+    }
+
+    public void setScope(String scope) {
+        this.scope = scope;
     }
 
     public Instant getCreatedAt() {
