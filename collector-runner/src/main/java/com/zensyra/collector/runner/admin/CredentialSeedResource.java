@@ -55,9 +55,42 @@ public class CredentialSeedResource {
         )).build();
     }
 
+    @POST
+    @Path("/suunto")
+    @Transactional
+    public Response seedSuunto(SuuntoCredentialRequest request) {
+        if (request == null || isBlank(request.clientId())
+                || isBlank(request.clientSecret()) || isBlank(request.subscriptionKey())) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("error", "clientId, clientSecret and subscriptionKey are required"))
+                    .build();
+        }
+
+        repo.deleteBySource(IntegrationSource.SUUNTO);
+
+        IntegrationCredential credential = new IntegrationCredential();
+        credential.setSource(IntegrationSource.SUUNTO);
+        credential.setClientId(request.clientId());
+        credential.setClientSecret(request.clientSecret());
+        credential.setApiSubscriptionKey(request.subscriptionKey());
+        repo.persist(credential);
+
+        // clientId only — the client secret and subscription key never appear
+        // in a log line or response body.
+        LOG.infof("CredentialSeedResource: seeded SUUNTO credentials for clientId '%s'", request.clientId());
+
+        return Response.ok(Map.of(
+                "source", "SUUNTO",
+                "clientId", request.clientId(),
+                "seeded", true
+        )).build();
+    }
+
     private boolean isBlank(String s) {
         return s == null || s.isBlank();
     }
 
     public record StravaCredentialRequest(String clientId, String clientSecret) {}
+
+    public record SuuntoCredentialRequest(String clientId, String clientSecret, String subscriptionKey) {}
 }
