@@ -48,4 +48,7 @@ databaseChangeLog:
       file: db/changelog/changes/039-add-scope-to-oauth-tokens.yaml
 
   - include:
+      file: db/changelog/changes/040-widen-oauth-token-columns.yaml
+
+  - include:
       file: db/changelog/db.changelog-suunto.yaml
