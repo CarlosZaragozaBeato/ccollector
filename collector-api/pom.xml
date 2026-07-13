@@ -87,6 +87,12 @@
             <artifactId>quarkus-jdbc-h2</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>3.9.1</version>
+            <scope>test</scope>
+        </dependency>
         <!-- First use of Testcontainers in collector-api: the FK-violation → 404
              mapping can only be exercised against a real Postgres FK, which H2
              (schema from entity mappings, no FK) cannot enforce. Version is

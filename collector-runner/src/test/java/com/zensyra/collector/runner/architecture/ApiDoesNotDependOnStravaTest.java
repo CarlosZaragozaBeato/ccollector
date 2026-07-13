@@ -54,13 +54,15 @@ class ApiDoesNotDependOnStravaTest {
                 .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
                 .importPackages("com.zensyra.collector");
 
-        // AthleteRegisterResource is the only write-path endpoint in collector-api;
-        // it handles OAuth token exchange and has no query port dependency by design.
+        // AthleteRegisterResource and SuuntoAthleteRegisterResource are the only
+        // write-path endpoints in collector-api; they handle OAuth token exchange
+        // and have no query port dependency by design.
         // All other Resource classes are read resources and must use collector-query.
         ArchRuleDefinition.classes()
                 .that().resideInAPackage("com.zensyra.collector.api..")
                 .and().haveSimpleNameEndingWith("Resource")
                 .and().doNotHaveSimpleName("AthleteRegisterResource")
+                .and().doNotHaveSimpleName("SuuntoAthleteRegisterResource")
                 .should().dependOnClassesThat()
                 .resideInAPackage("com.zensyra.collector.query..")
                 .check(importedClasses);

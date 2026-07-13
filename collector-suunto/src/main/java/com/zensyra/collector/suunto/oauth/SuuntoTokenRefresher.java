@@ -1,0 +1,104 @@
+package com.zensyra.collector.suunto.oauth;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zensyra.collector.core.credential.IntegrationCredential;
+import com.zensyra.collector.core.credential.IntegrationCredentialRepository;
+import com.zensyra.collector.core.oauth.TokenRefreshException;
+import com.zensyra.collector.core.oauth.TokenRefreshResult;
+import com.zensyra.collector.core.oauth.TokenRefresher;
+import com.zensyra.collector.core.sync.IntegrationSource;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.faulttolerance.Retry;
+import org.jboss.logging.Logger;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+
+@ApplicationScoped
+public class SuuntoTokenRefresher implements TokenRefresher {
+
+    private static final Logger LOG = Logger.getLogger(SuuntoTokenRefresher.class);
+
+    @ConfigProperty(name = "suunto.oauth.token-url",
+                    defaultValue = "https://cloudapi-oauth.suunto.com/oauth/token")
+    String tokenUrl;
+
+    @Inject
+    IntegrationCredentialRepository credentialRepository;
+
+    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Override
+    public IntegrationSource source() {
+        return IntegrationSource.SUUNTO;
+    }
+
+    @Override
+    @Retry(maxRetries = 2, delay = 2000, jitter = 500,
+           retryOn = {IOException.class, InterruptedException.class})
+    public TokenRefreshResult refresh(String refreshToken) throws IOException, InterruptedException {
+        IntegrationCredential credential = credentialRepository
+                .findBySource(IntegrationSource.SUUNTO)
+                .orElseThrow(() -> new TokenRefreshException(
+                        "No Suunto credentials were found in the database — " +
+                                "insert a row in integration_credentials with source='SUUNTO'"
+                ));
+
+        String body = buildFormBody(
+                credential.getClientId(),
+                credential.getClientSecret(),
+                refreshToken
+        );
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(tokenUrl))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        // IOException and InterruptedException propagate to the @Retry interceptor,
+        // which retries up to 2 times on transient network failures.
+        // Non-retriable errors (non-200 status, JSON parse) throw TokenRefreshException directly.
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            // Log only the status code — never the raw external response body, which
+            // is unnecessary exposure of an upstream payload we don't control.
+            LOG.errorf("Suunto token refresh failed with status %d", response.statusCode());
+            throw new TokenRefreshException(
+                    "Suunto token refresh failed — HTTP %d".formatted(response.statusCode())
+            );
+        }
+
+        JsonNode json = objectMapper.readTree(response.body());
+
+        // Suunto returns a relative lifetime (expires_in seconds), not Strava's
+        // absolute expires_at epoch. uk/ukv/jti fields are deliberately never read.
+        String newAccessToken  = json.get("access_token").asText();
+        String newRefreshToken = json.get("refresh_token").asText();
+        Instant expiresAt      = Instant.now().plusSeconds(json.get("expires_in").asLong());
+
+        return new TokenRefreshResult(newAccessToken, newRefreshToken, expiresAt);
+    }
+
+    private String buildFormBody(String clientId, String clientSecret, String refreshToken) {
+        return "client_id="     + encode(clientId)
+                + "&client_secret=" + encode(clientSecret)
+                + "&refresh_token=" + encode(refreshToken)
+                + "&grant_type=refresh_token";
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+}
