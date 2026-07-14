@@ -10,9 +10,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  * anything not explicitly registered below deserializes to
  * {@link SuuntoGenericExtensionDto} instead of breaking the sync.
  *
- * <p>FitnessExtension, IntensityExtension and WeatherExtension subtypes are
- * pending — their field names are undocumented and will be added verbatim
- * from a real sanitized response, never guessed.
+ * <p>All four registered subtypes carry field names taken verbatim from a
+ * real /v2/workouts payload (2026-07-14) — never guessed.
  */
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
@@ -21,7 +20,10 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
         visible = true,
         defaultImpl = SuuntoGenericExtensionDto.class)
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = SuuntoSummaryExtensionDto.class, name = "SummaryExtension")
+        @JsonSubTypes.Type(value = SuuntoSummaryExtensionDto.class, name = "SummaryExtension"),
+        @JsonSubTypes.Type(value = SuuntoFitnessExtensionDto.class, name = "FitnessExtension"),
+        @JsonSubTypes.Type(value = SuuntoIntensityExtensionDto.class, name = "IntensityExtension"),
+        @JsonSubTypes.Type(value = SuuntoWeatherExtensionDto.class, name = "WeatherExtension")
 })
 public interface SuuntoWorkoutExtensionDto {
 
