@@ -1,0 +1,31 @@
+package com.zensyra.collector.suunto.api.dto;
+
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+
+/**
+ * Polymorphic base for the {@code extensions} array, discriminated by the
+ * {@code type} field. The official schema types this array as opaque
+ * ({@code [{}]}), so Suunto can introduce new extension types without notice:
+ * anything not explicitly registered below deserializes to
+ * {@link SuuntoGenericExtensionDto} instead of breaking the sync.
+ *
+ * <p>All four registered subtypes carry field names taken verbatim from a
+ * real /v2/workouts payload (2026-07-14) — never guessed.
+ */
+@JsonTypeInfo(
+        use = JsonTypeInfo.Id.NAME,
+        include = JsonTypeInfo.As.EXISTING_PROPERTY,
+        property = "type",
+        visible = true,
+        defaultImpl = SuuntoGenericExtensionDto.class)
+@JsonSubTypes({
+        @JsonSubTypes.Type(value = SuuntoSummaryExtensionDto.class, name = "SummaryExtension"),
+        @JsonSubTypes.Type(value = SuuntoFitnessExtensionDto.class, name = "FitnessExtension"),
+        @JsonSubTypes.Type(value = SuuntoIntensityExtensionDto.class, name = "IntensityExtension"),
+        @JsonSubTypes.Type(value = SuuntoWeatherExtensionDto.class, name = "WeatherExtension")
+})
+public interface SuuntoWorkoutExtensionDto {
+
+    String type();
+}

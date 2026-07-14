@@ -1,0 +1,182 @@
+{
+    "error": null,
+    "payload": [
+        {
+            "workoutId": 0,
+            "activityId": 1,
+            "startTime": 1784004759450,
+            "stopTime": 1784007954080,
+            "totalTime": 3195.1609999999996,
+            "estimatedFloorsClimbed": 0,
+            "totalDistance": 10015.0,
+            "totalAscent": 65.8,
+            "totalDescent": 59.2,
+            "startPosition": { "x": -3.3428966666666664, "y": 39.61966 },
+            "stopPosition": { "x": -3.343005, "y": 39.619796666666666 },
+            "centerPosition": { "x": -3.3694800000000003, "y": 39.62107833333334 },
+            "maxSpeed": 3.67,
+            "stepCount": 8645,
+            "recoveryTime": 53460,
+            "cumulativeRecoveryTime": 432000,
+            "rankings": {
+                "totalTimeOnRouteRanking": {
+                    "originalRanking": 2,
+                    "originalNumberOfWorkouts": 2
+                }
+            },
+            "extensions": [
+                {
+                    "type": "FitnessExtension",
+                    "maxHeartRate": 194,
+                    "vo2Max": 55,
+                    "estimatedVo2Max": 54.7,
+                    "fitnessAge": 26
+                },
+                {
+                    "type": "IntensityExtension",
+                    "zones": {
+                        "heartRate": {
+                            "zone1": { "totalTime": 245.89, "lowerLimit": 0.0 },
+                            "zone2": { "totalTime": 1846.469, "lowerLimit": 140.0 },
+                            "zone3": { "totalTime": 995.969, "lowerLimit": 149.0 },
+                            "zone4": { "totalTime": 106.316, "lowerLimit": 159.0 },
+                            "zone5": { "totalTime": 0.0, "lowerLimit": 169.0 }
+                        },
+                        "speed": {
+                            "zone1": { "totalTime": 22.006, "lowerLimit": 0.0 },
+                            "zone2": { "totalTime": 575.973, "lowerLimit": 2.777 },
+                            "zone3": { "totalTime": 2278.008, "lowerLimit": 3.03 },
+                            "zone4": { "totalTime": 317.042, "lowerLimit": 3.333 },
+                            "zone5": { "totalTime": 0.0, "lowerLimit": 3.703 }
+                        },
+                        "power": {
+                            "zone1": { "totalTime": 7.0, "lowerLimit": 0.0 },
+                            "zone2": { "totalTime": 1.008, "lowerLimit": 100.0 },
+                            "zone3": { "totalTime": 1.998, "lowerLimit": 150.0 },
+                            "zone4": { "totalTime": 586.993, "lowerLimit": 200.0 },
+                            "zone5": { "totalTime": 2596.03, "lowerLimit": 250.0 }
+                        }
+                    },
+                    "physiologicalThresholds": null,
+                    "overallIntensity": null
+                },
+                {
+                    "type": "SummaryExtension",
+                    "avgSpeed": 3.134,
+                    "avgPower": 261.3,
+                    "maxPower": 317.0,
+                    "avgVerticalOscillation": 0.109985,
+                    "avgStrideLength": null,
+                    "avgGroundContactTime": 0.25431,
+                    "avgCadence": 1.363,
+                    "maxCadence": 1.4,
+                    "ascent": 65.8,
+                    "descent": 59.2,
+                    "ascentTime": 1732.0,
+                    "descentTime": 1439.0,
+                    "pte": 2.9,
+                    "peakEpoc": 51.9,
+                    "performanceLevel": null,
+                    "recoveryTime": 53040.0,
+                    "weather": null,
+                    "minTemperature": 293.7,
+                    "avgTemperature": 295.6,
+                    "maxTemperature": 303.1,
+                    "workoutType": null,
+                    "feeling": 2,
+                    "tags": null,
+                    "gear": {
+                        "manufacturer": "Suunto",
+                        "name": "Suunto Race 2",
+                        "displayName": null,
+                        "serialNumber": "2539C7000493",
+                        "softwareVersion": "2.53.42",
+                        "hardwareVersion": "Sailfish_RevA1",
+                        "productType": "SPORT_WATCH"
+                    },
+                    "additionalGears": null,
+                    "exerciseId": null,
+                    "apps": [
+                        {
+                            "name": "Manual Intervals - Running Pace",
+                            "summaryOutputs": [
+                                { "format": "Count_Fourdigits", "id": "IntervalCount", "name": "Intervals", "postfix": "", "summaryValue": 1.0 },
+                                { "format": "Pace_FixedNoLeadingZero", "id": "AVGpace", "name": "Interval AVG pace", "postfix": "", "summaryValue": 0.0 },
+                                { "format": "HeartRate_Fourdigits", "id": "AVGHR", "name": "Interval AVG HR", "postfix": "", "summaryValue": 0.0 }
+                            ],
+                            "id": "zzmirpen"
+                        }
+                    ],
+                    "repetitionCount": null,
+                    "lacticThHr": null,
+                    "avgAscentSpeed": null,
+                    "maxAscentSpeed": null,
+                    "avgDescentSpeed": null,
+                    "maxDescentSpeed": null,
+                    "avgDistancePerStroke": null,
+                    "fatConsumption": null,
+                    "carbohydrateConsumption": null,
+                    "avgLeftGroundContactBalance": null,
+                    "avgRightGroundContactBalance": null,
+                    "lacticThPace": null,
+                    "avgFlightTime": null,
+                    "avgContactTimeRatio": null,
+                    "teamSportId": null,
+                    "heartRateRecovery": { "comparisonLevel": "Normal", "drop": -27, "level": "Low" },
+                    "finalEndurance": null,
+                    "minimumEndurance": null,
+                    "curEnduranceDistance": null,
+                    "minEnduranceDistance": null,
+                    "enduranceValid": null
+                },
+                {
+                    "type": "WeatherExtension",
+                    "weatherIcon": "01d",
+                    "temperature": 295.37,
+                    "windSpeed": 1.75,
+                    "windDirection": 169.0,
+                    "humidity": 31
+                }
+            ],
+            "extensionTypes": [
+                "ALTITUDESTREAM", "BATTERYLEVELSTREAM", "CADENCESTREAM", "DISTANCEDELTA",
+                "DISTANCELAP", "FITNESS", "GROUNDCONTACTTIMESTREAM", "HEARTRATE",
+                "HEARTRATESTREAM", "INTENSITY", "LOCATIONSTREAM", "POWERSTREAM",
+                "SEALEVELPRESSURESTREAM", "SML", "SPEEDSTREAM", "SUMMARY",
+                "TEMPERATURESTREAM", "VERTICALOSCILLATIONSTREAM", "VERTICALSPEEDSTREAM",
+                "WEATHER", "WEATHERSTREAM"
+            ],
+            "minAltitude": 6763.0,
+            "maxAltitude": 7227.0,
+            "isEdited": false,
+            "isManuallyAdded": false,
+            "tss": {
+                "calculationMethod": "HR",
+                "trainingStressScore": 52.586864,
+                "intensityFactor": null,
+                "normalizedPower": 262.49988,
+                "averageGradeAdjustedPace": 3.2046084
+            },
+            "tssList": [
+                { "calculationMethod": "HR", "trainingStressScore": 52.586864, "intensityFactor": null, "normalizedPower": 262.49988, "averageGradeAdjustedPace": 3.2046084 },
+                { "calculationMethod": "POWER", "trainingStressScore": 96.928955, "intensityFactor": 1.0499995, "normalizedPower": 262.49988, "averageGradeAdjustedPace": 3.2046084 },
+                { "calculationMethod": "PACE", "trainingStressScore": 66.44755, "intensityFactor": 0.9505806, "normalizedPower": 262.49988, "averageGradeAdjustedPace": 3.2046084 },
+                { "calculationMethod": "MET", "trainingStressScore": 49.702503, "intensityFactor": null, "normalizedPower": null, "averageGradeAdjustedPace": null }
+            ],
+            "suuntoTags": ["IMPACT_AEROBIC_TO_ANAEROBIC"],
+            "avgPower": 261.3,
+            "viewCount": 0,
+            "pictureCount": 0,
+            "commentCount": 0,
+            "avgPace": 5.32,
+            "timeOffsetInMinutes": 120,
+            "energyConsumption": 663,
+            "avgSpeed": 3.13,
+            "hrdata": { "workoutMaxHR": 161, "workoutAvgHR": 147, "userMaxHR": 194, "hrmax": 161, "avg": 147, "max": 194 },
+            "cadence": { "max": 84, "avg": 82 },
+            "workoutKey": "6a55d9e7994229464c7710bb",
+            "lastModified": 1784011239246
+        }
+    ],
+    "metadata": { "workoutcount": "1", "until": "1784036711816" }
+}
