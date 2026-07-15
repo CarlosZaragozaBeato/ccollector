@@ -25,6 +25,10 @@
             <groupId>com.zensyra</groupId>
             <artifactId>collector-core</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.zensyra</groupId>
+            <artifactId>collector-query</artifactId>
+        </dependency>
 
         <!-- ===== PERSISTENCE ===== -->
         <dependency>
