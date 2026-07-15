@@ -31,6 +31,10 @@
         </dependency>
         <dependency>
             <groupId>com.zensyra</groupId>
+            <artifactId>collector-suunto</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.zensyra</groupId>
             <artifactId>collector-api</artifactId>
         </dependency>
         <dependency>

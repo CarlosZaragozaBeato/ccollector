@@ -12,10 +12,10 @@
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>collector-api</artifactId>
+    <artifactId>collector-suunto</artifactId>
     <description>
-        Public read REST API. Exposes activities, training load, and statistics
-        to TTemplate and BBrain without direct database access.
+        Suunto integration: OAuth2, Cloud API client, webhook-driven workout synchronization.
+        Implements the interfaces defined in collector-core.
     </description>
 
     <dependencies>
@@ -29,22 +29,18 @@
             <groupId>com.zensyra</groupId>
             <artifactId>collector-query</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.zensyra</groupId>
-            <artifactId>collector-journal</artifactId>
-        </dependency>
 
-        <!-- ===== REST (servidor) ===== -->
+        <!-- ===== PERSISTENCE ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest</artifactId>
+            <artifactId>quarkus-hibernate-orm-panache</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-rest-jackson</artifactId>
+            <artifactId>quarkus-jdbc-postgresql</artifactId>
         </dependency>
 
-        <!-- ===== REST CLIENT (required for StravaApiClient to be a CDI bean in tests) ===== -->
+        <!-- ===== HTTP CLIENT ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-rest-client</artifactId>
@@ -54,16 +50,10 @@
             <artifactId>quarkus-rest-client-jackson</artifactId>
         </dependency>
 
-        <!-- ===== OPENAPI / SWAGGER UI ===== -->
+        <!-- ===== SERIALIZATION ===== -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-smallrye-openapi</artifactId>
-        </dependency>
-
-        <!-- ===== VALIDATION ===== -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-hibernate-validator</artifactId>
+            <artifactId>quarkus-jackson</artifactId>
         </dependency>
 
         <!-- ===== TESTING ===== -->
@@ -78,11 +68,6 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.rest-assured</groupId>
-            <artifactId>rest-assured</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-jdbc-h2</artifactId>
             <scope>test</scope>
@@ -91,28 +76,6 @@
             <groupId>org.wiremock</groupId>
             <artifactId>wiremock</artifactId>
             <version>3.9.1</version>
-            <scope>test</scope>
-        </dependency>
-        <!-- First use of Testcontainers in collector-api: the FK-violation → 404
-             mapping can only be exercised against a real Postgres FK, which H2
-             (schema from entity mappings, no FK) cannot enforce. Version is
-             managed by the root pom's testcontainers.version (1.21.4). -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-jdbc-postgresql</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <!-- Test-only: lets the FK integration test build the real journal schema
-             (035/037/038) from the actual migrations rather than hand-copied DDL.
-             The H2 unit tests keep quarkus.liquibase.enabled=false. -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-liquibase</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -132,8 +95,7 @@
                 </executions>
             </plugin>
             <!-- Generates META-INF/jandex.idx so Quarkus discovers this module's
-                 beans and JAX-RS resources when collector-runner builds the
-                 native binary with Mandrel. -->
+                 beans when it is used as a dependency (collector-runner). -->
             <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>
@@ -143,20 +105,6 @@
                         <id>make-index</id>
                         <goals>
                             <goal>jandex</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <!-- Runs *IT tests (Testcontainers FK integration test) at the
-                 verify phase — same pattern as collector-runner. -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>integration-test</goal>
-                            <goal>verify</goal>
                         </goals>
                     </execution>
                 </executions>

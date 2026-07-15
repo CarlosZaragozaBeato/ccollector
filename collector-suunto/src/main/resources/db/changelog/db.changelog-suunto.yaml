@@ -1,0 +1,4 @@
+# Suunto-owned schema objects. Intentionally empty at scaffold time:
+# future issues (#3 OAuth, webhook pending-queue) add changesets here,
+# numbered 040 onwards.
+databaseChangeLog: []

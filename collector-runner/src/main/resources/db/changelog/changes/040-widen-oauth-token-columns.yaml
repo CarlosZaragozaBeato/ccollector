@@ -1,0 +1,28 @@
+databaseChangeLog:
+  - changeSet:
+      id: 040-widen-oauth-token-columns
+      author: zensyra
+      comment: >
+        Suunto access/refresh tokens are JWTs (700+ characters in plaintext).
+        027 narrowed these columns to varchar(512), which caps the AES-GCM +
+        base64 encrypted payload at roughly 356 plaintext characters — enough
+        for Strava's short hex tokens, impossible for Suunto's JWTs. Widen
+        back to TEXT: encrypted token values have no bounded length.
+      changes:
+        - modifyDataType:
+            tableName: oauth_tokens
+            columnName: access_token
+            newDataType: TEXT
+        - modifyDataType:
+            tableName: oauth_tokens
+            columnName: refresh_token
+            newDataType: TEXT
+      rollback:
+        - modifyDataType:
+            tableName: oauth_tokens
+            columnName: access_token
+            newDataType: varchar(512)
+        - modifyDataType:
+            tableName: oauth_tokens
+            columnName: refresh_token
+            newDataType: varchar(512)

@@ -26,12 +26,14 @@ public class OAuthToken extends PanacheEntityBase {
     @Column(name = "integration_account_id")
     private UUID integrationAccountId;
 
+    // No length cap: Suunto tokens are JWTs (700+ chars) and the AES-GCM +
+    // base64 encrypted form grows further — the columns are TEXT (migration 040).
     @Convert(converter = AesGcmAttributeConverter.class)
-    @Column(name="access_token", nullable = false, length = 512)
+    @Column(name="access_token", nullable = false, columnDefinition = "TEXT")
     private String accessToken;
 
     @Convert(converter = AesGcmAttributeConverter.class)
-    @Column(name="refresh_token", nullable = false, length = 512)
+    @Column(name="refresh_token", nullable = false, columnDefinition = "TEXT")
     private String refreshToken;
 
     @Column(name="expires_at",nullable = false)
@@ -62,8 +64,11 @@ public class OAuthToken extends PanacheEntityBase {
     }
 
     public boolean isExpired(){
-        Instant margin = Instant.now().minusSeconds(60);
-        return expiresAt.isBefore(margin);
+        // The 60s margin is a safety buffer BEFORE expiry: a token that expires
+        // within the next minute is already treated as expired, so callers never
+        // receive one that lapses mid-request. Source-agnostic — works the same
+        // for Strava's 6h window and Suunto's 24h window.
+        return expiresAt.isBefore(Instant.now().plusSeconds(60));
     }
 
     public Long getId() {
