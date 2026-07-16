@@ -24,6 +24,12 @@ public class IntegrationCredential extends PanacheEntityBase {
     @Column(name="client_secret",nullable = false, length = 512)
     private String clientSecret;
 
+    // Second credential for sources that need one (Suunto's Azure APIM
+    // subscription key). Nullable: Strava never has it.
+    @Convert(converter = AesGcmAttributeConverter.class)
+    @Column(name="api_subscription_key", length = 512)
+    private String apiSubscriptionKey;
+
     public Long getId() {
         return id;
     }
@@ -54,5 +60,13 @@ public class IntegrationCredential extends PanacheEntityBase {
 
     public void setClientSecret(String clientSecret) {
         this.clientSecret = clientSecret;
+    }
+
+    public String getApiSubscriptionKey() {
+        return apiSubscriptionKey;
+    }
+
+    public void setApiSubscriptionKey(String apiSubscriptionKey) {
+        this.apiSubscriptionKey = apiSubscriptionKey;
     }
 }

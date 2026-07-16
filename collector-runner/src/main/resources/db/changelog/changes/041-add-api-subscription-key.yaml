@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: 041-add-api-subscription-key
+      author: zensyra
+      comment: >
+        Suunto's Cloud API requires a second credential besides the OAuth
+        client pair: an Azure APIM subscription key sent as the
+        Ocp-Apim-Subscription-Key header on every data call. Stored
+        AES-GCM-encrypted like client_secret (same varchar(512) sizing).
+        Nullable by design — sources that don't need it (Strava) leave it NULL.
+      changes:
+        - addColumn:
+            tableName: integration_credentials
+            columns:
+              - column:
+                  name: api_subscription_key
+                  type: varchar(512)
+      rollback:
+        - dropColumn:
+            tableName: integration_credentials
+            columnName: api_subscription_key
