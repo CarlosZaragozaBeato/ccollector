@@ -1,6 +1,7 @@
 package com.zensyra.collector.suunto.api;
 
 import com.zensyra.collector.suunto.api.dto.SuuntoWorkoutListResponse;
+import com.zensyra.collector.suunto.ratelimit.SuuntoRateLimitFilter;
 import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
@@ -10,9 +11,11 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.faulttolerance.Retry;
+import org.eclipse.microprofile.rest.client.annotation.RegisterProvider;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
 @RegisterRestClient(configKey = "suunto-api")
+@RegisterProvider(SuuntoRateLimitFilter.class)
 @Path("/v2")
 @Produces(MediaType.APPLICATION_JSON)
 public interface SuuntoApiClient {

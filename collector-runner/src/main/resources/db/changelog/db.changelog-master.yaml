@@ -51,4 +51,7 @@ databaseChangeLog:
       file: db/changelog/changes/040-widen-oauth-token-columns.yaml
 
   - include:
+      file: db/changelog/changes/041-add-api-subscription-key.yaml
+
+  - include:
       file: db/changelog/db.changelog-suunto.yaml

@@ -11,6 +11,7 @@ import com.zensyra.collector.strava.identity.StravaActivityQueryPort;
 import com.zensyra.collector.strava.identity.StravaAthleteStatsQueryPort;
 import com.zensyra.collector.strava.identity.StravaBestEffortQueryPort;
 import com.zensyra.collector.strava.identity.StravaTrainingLoadQueryPort;
+import com.zensyra.collector.suunto.identity.SuuntoActivityQueryPort;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -22,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Verifies the real CDI wiring between {@code collector-query} and
@@ -58,14 +60,19 @@ class ActivityQueryPortWiringTest {
     ActivityQueryComposer composer;
 
     @Test
-    void shouldDiscoverTheStravaActivityQueryPortAsACdiBean() {
+    void shouldDiscoverBothActivityQueryPortAdaptersAsCdiBeans() {
         assertFalse(activityQueryPorts.isUnsatisfied(),
-                "Expected at least one ActivityQueryPort bean to be discovered by CDI");
+                "Expected ActivityQueryPort beans to be discovered by CDI");
 
+        // Two sources since #7: the composer's "general N-source case" is no
+        // longer theoretical. An unexpected third registration still fails here.
         List<ActivityQueryPort> ports = activityQueryPorts.stream().toList();
-        assertEquals(1, ports.size(),
-                "Expected exactly one ActivityQueryPort implementation today (Strava only)");
-        assertInstanceOf(StravaActivityQueryPort.class, ports.get(0));
+        assertEquals(2, ports.size(),
+                "Expected exactly the Strava and Suunto ActivityQueryPort implementations");
+        assertTrue(ports.stream().anyMatch(p -> p instanceof StravaActivityQueryPort),
+                "StravaActivityQueryPort must be registered");
+        assertTrue(ports.stream().anyMatch(p -> p instanceof SuuntoActivityQueryPort),
+                "SuuntoActivityQueryPort must be registered");
     }
 
     @Test
@@ -107,8 +114,13 @@ class ActivityQueryPortWiringTest {
                 "Expected at least one TrainingLoadQueryPort bean to be discovered by CDI");
 
         List<TrainingLoadQueryPort> ports = trainingLoadQueryPorts.stream().toList();
+        // Deliberately still 1: #7 decided NOT to register a Suunto
+        // training-load port until the cross-source aggregation issue lands —
+        // a second one would feed non-deterministic data into the composer's
+        // putIfAbsent and the resource's first-port-wins loop. This assertion
+        // guards that decision.
         assertEquals(1, ports.size(),
-                "Expected exactly one TrainingLoadQueryPort implementation today (Strava only)");
+                "Expected exactly one TrainingLoadQueryPort implementation (Strava only, by design — see #7)");
         assertInstanceOf(StravaTrainingLoadQueryPort.class, ports.get(0));
     }
 

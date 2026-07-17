@@ -1,0 +1,102 @@
+databaseChangeLog:
+  - changeSet:
+      id: 042-create-suunto-workouts
+      author: zensyra
+      comment: >
+        Source-owned storage for synced Suunto workouts (#7). workout_key is
+        the natural unique key every upsert checks (never the surrogate id).
+        Holds the neutral-Activity fields plus the four derived metrics and
+        the per-workout training-stress contribution (tss + method) selected
+        from Suunto's own tssList; the daily cross-source EMA aggregation is
+        a separate, deferred issue. last_modified keeps Suunto's epoch-ms
+        modification stamp verbatim — it is the incremental-sync watermark.
+      changes:
+        - createTable:
+            tableName: suunto_workouts
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: workout_key
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: suunto_user
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: activity_id
+                  type: INT
+              - column:
+                  name: sport_type
+                  type: varchar(50)
+              - column:
+                  name: total_distance
+                  type: DOUBLE PRECISION
+              - column:
+                  name: moving_time_secs
+                  type: INT
+              - column:
+                  name: start_date
+                  type: TIMESTAMPTZ
+              - column:
+                  name: total_elevation_gain
+                  type: DOUBLE PRECISION
+              - column:
+                  name: average_heartrate
+                  type: DOUBLE PRECISION
+              - column:
+                  name: average_watts
+                  type: DOUBLE PRECISION
+              - column:
+                  name: normalized_power
+                  type: numeric(10,4)
+              - column:
+                  name: variability_index
+                  type: numeric(10,6)
+              - column:
+                  name: efficiency_factor
+                  type: numeric(10,6)
+              - column:
+                  name: intensity_factor
+                  type: numeric(10,6)
+              - column:
+                  name: tss
+                  type: DOUBLE PRECISION
+              - column:
+                  name: tss_calculation_method
+                  type: varchar(20)
+              - column:
+                  name: last_modified
+                  type: BIGINT
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: suunto_workouts
+            columnNames: workout_key
+            constraintName: uq_suunto_workouts_workout_key
+        - createIndex:
+            indexName: idx_suunto_workouts_user_start_date
+            tableName: suunto_workouts
+            columns:
+              - column:
+                  name: suunto_user
+              - column:
+                  name: start_date
+      rollback:
+        - dropTable:
+            tableName: suunto_workouts
