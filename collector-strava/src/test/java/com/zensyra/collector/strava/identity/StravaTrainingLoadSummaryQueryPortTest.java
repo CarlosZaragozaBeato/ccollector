@@ -1,8 +1,5 @@
 package com.zensyra.collector.strava.identity;
 
-import com.zensyra.collector.core.identity.IntegrationAccount;
-import com.zensyra.collector.core.identity.IntegrationAccountRepository;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.query.model.Granularity;
 import com.zensyra.collector.query.model.TrainingLoadSummary;
 import com.zensyra.collector.strava.trainingload.AthleteTrainingLoad;
@@ -23,13 +20,12 @@ import static org.mockito.Mockito.when;
 class StravaTrainingLoadSummaryQueryPortTest {
 
     @Test
-    void shouldReturnEmptyListWhenAthleteHasNoStravaAccount() {
-        IntegrationAccountRepository accounts = mock(IntegrationAccountRepository.class);
+    void shouldReturnEmptyListWhenRepositoryHasNoRows() {
         AthleteTrainingLoadRepository repo = mock(AthleteTrainingLoadRepository.class);
-        StravaTrainingLoadSummaryQueryPort port = new StravaTrainingLoadSummaryQueryPort(accounts, repo);
+        StravaTrainingLoadSummaryQueryPort port = new StravaTrainingLoadSummaryQueryPort(repo);
 
         UUID athleteId = UUID.randomUUID();
-        when(accounts.findByAthleteId(athleteId)).thenReturn(List.of());
+        when(repo.findByAthleteIdAndDateRange(eq(athleteId), any(), any())).thenReturn(List.of());
 
         List<TrainingLoadSummary> result = port.listByAthlete(
                 athleteId, LocalDate.now().minusWeeks(4), LocalDate.now(), Granularity.WEEKLY);
@@ -39,19 +35,16 @@ class StravaTrainingLoadSummaryQueryPortTest {
 
     @Test
     void shouldAggregateDailyRowsIntoWeeklyBuckets() {
-        IntegrationAccountRepository accounts = mock(IntegrationAccountRepository.class);
         AthleteTrainingLoadRepository repo = mock(AthleteTrainingLoadRepository.class);
-        StravaTrainingLoadSummaryQueryPort port = new StravaTrainingLoadSummaryQueryPort(accounts, repo);
+        StravaTrainingLoadSummaryQueryPort port = new StravaTrainingLoadSummaryQueryPort(repo);
 
         UUID athleteId = UUID.randomUUID();
-        IntegrationAccount account = new IntegrationAccount(athleteId, IntegrationSource.STRAVA, "42");
-        when(accounts.findByAthleteId(athleteId)).thenReturn(List.of(account));
 
         // Mon 2025-01-06 and Wed 2025-01-08 — same ISO week; Mon 2025-01-13 — next week
         AthleteTrainingLoad mon = load(6, 80.0, 55.0, 40.0, 15.0);
         AthleteTrainingLoad wed = load(8, 60.0, 56.0, 45.0, 11.0);
         AthleteTrainingLoad nextMon = load(13, 70.0, 57.0, 42.0, 15.0);
-        when(repo.findByAthleteIdAndDateRange(eq(42L), any(), any()))
+        when(repo.findByAthleteIdAndDateRange(eq(athleteId), any(), any()))
                 .thenReturn(List.of(mon, wed, nextMon));
 
         List<TrainingLoadSummary> result = port.listByAthlete(
@@ -75,19 +68,16 @@ class StravaTrainingLoadSummaryQueryPortTest {
 
     @Test
     void shouldAggregateDailyRowsIntoMonthlyBuckets() {
-        IntegrationAccountRepository accounts = mock(IntegrationAccountRepository.class);
         AthleteTrainingLoadRepository repo = mock(AthleteTrainingLoadRepository.class);
-        StravaTrainingLoadSummaryQueryPort port = new StravaTrainingLoadSummaryQueryPort(accounts, repo);
+        StravaTrainingLoadSummaryQueryPort port = new StravaTrainingLoadSummaryQueryPort(repo);
 
         UUID athleteId = UUID.randomUUID();
-        IntegrationAccount account = new IntegrationAccount(athleteId, IntegrationSource.STRAVA, "99");
-        when(accounts.findByAthleteId(athleteId)).thenReturn(List.of(account));
 
         AthleteTrainingLoad jan15 = load(15, 50.0, 60.0, 50.0, 10.0);   // January
         AthleteTrainingLoad jan28 = load(28, 70.0, 62.0, 48.0, 14.0);   // January
-        AthleteTrainingLoad feb03 = load(32, 40.0, 63.0, 46.0, 17.0);   // February (day 32 = Feb 1 + 1)
-        when(repo.findByAthleteIdAndDateRange(eq(99L), any(), any()))
-                .thenReturn(List.of(jan15, jan28, feb03));
+        AthleteTrainingLoad feb01 = load(32, 40.0, 63.0, 46.0, 17.0);   // February (day 32 = Feb 1)
+        when(repo.findByAthleteIdAndDateRange(eq(athleteId), any(), any()))
+                .thenReturn(List.of(jan15, jan28, feb01));
 
         List<TrainingLoadSummary> result = port.listByAthlete(
                 athleteId, LocalDate.of(2025, 1, 1), LocalDate.of(2025, 2, 28), Granularity.MONTHLY);

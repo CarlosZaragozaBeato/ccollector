@@ -1,8 +1,5 @@
 package com.zensyra.collector.strava.identity;
 
-import com.zensyra.collector.core.identity.IntegrationAccount;
-import com.zensyra.collector.core.identity.IntegrationAccountRepository;
-import com.zensyra.collector.core.sync.IntegrationSource;
 import com.zensyra.collector.query.model.Granularity;
 import com.zensyra.collector.query.model.TrainingLoadSummary;
 import com.zensyra.collector.query.port.TrainingLoadSummaryQueryPort;
@@ -17,16 +14,15 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
 
 /**
  * Strava implementation of {@link TrainingLoadSummaryQueryPort}.
  *
- * <p>Resolution path mirrors {@link StravaTrainingLoadQueryPort}: canonical
- * athleteId → Strava {@link IntegrationAccount} → stravaAthleteId → rows
- * from {@code athlete_training_load}.
+ * <p>After migration 043 the underlying {@code athlete_training_load} table is
+ * keyed by the canonical athlete UUID, so no source-specific identity
+ * translation is needed — the query goes straight to the repository.
  *
  * <p>Aggregation is performed in Java after loading the bounded date range.
  * Period boundaries follow ISO 8601: weeks start on Monday, months on the 1st.
@@ -36,22 +32,14 @@ import java.util.UUID;
  *   <li>{@code ctlEnd / atlEnd / tsbEnd} — snapshot of the last day with data
  *       in the period (approximates end-of-period fitness / fatigue / form)
  * </ul>
- *
- * <p>TSS: {@code (moving_time_s / 3600) × IF² × 100}, using each activity's real
- * intensity factor when available, falling back to IF = 0.75 only when it is null.
- * See {@code TrainingLoadService} for the full derivation.
  */
 @ApplicationScoped
 public class StravaTrainingLoadSummaryQueryPort implements TrainingLoadSummaryQueryPort {
 
-    private final IntegrationAccountRepository integrationAccountRepository;
     private final AthleteTrainingLoadRepository athleteTrainingLoadRepository;
 
     @Inject
-    public StravaTrainingLoadSummaryQueryPort(
-            IntegrationAccountRepository integrationAccountRepository,
-            AthleteTrainingLoadRepository athleteTrainingLoadRepository) {
-        this.integrationAccountRepository = integrationAccountRepository;
+    public StravaTrainingLoadSummaryQueryPort(AthleteTrainingLoadRepository athleteTrainingLoadRepository) {
         this.athleteTrainingLoadRepository = athleteTrainingLoadRepository;
     }
 
@@ -59,22 +47,10 @@ public class StravaTrainingLoadSummaryQueryPort implements TrainingLoadSummaryQu
     public List<TrainingLoadSummary> listByAthlete(
             UUID athleteId, LocalDate from, LocalDate to, Granularity granularity) {
 
-        Optional<IntegrationAccount> account = resolveStravaAccount(athleteId);
-        if (account.isEmpty()) {
-            return List.of();
-        }
-
-        Long stravaAthleteId = Long.parseLong(account.get().getExternalUserId());
         List<AthleteTrainingLoad> rows =
-                athleteTrainingLoadRepository.findByAthleteIdAndDateRange(stravaAthleteId, from, to);
+                athleteTrainingLoadRepository.findByAthleteIdAndDateRange(athleteId, from, to);
 
         return aggregate(athleteId, rows, granularity);
-    }
-
-    private Optional<IntegrationAccount> resolveStravaAccount(UUID athleteId) {
-        return integrationAccountRepository.findByAthleteId(athleteId).stream()
-                .filter(a -> a.getSource() == IntegrationSource.STRAVA)
-                .findFirst();
     }
 
     private List<TrainingLoadSummary> aggregate(
