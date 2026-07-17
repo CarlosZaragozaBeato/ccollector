@@ -73,6 +73,103 @@ class CredentialSeedIT {
     }
 
     @Test
+    void seedSuunto_freshInstall_roundTripsViaJpaEncryption() throws Exception {
+        String subscriptionKey = "test-suunto-subscription-key-0123456789abcdef";
+        given()
+                .header("X-Admin-Token", ADMIN_TOKEN)
+                .contentType("application/json")
+                .body("{\"clientId\":\"suunto-client-id\",\"clientSecret\":\"suunto-client-secret\","
+                        + "\"subscriptionKey\":\"" + subscriptionKey + "\"}")
+                .when().post("/admin/credentials/suunto")
+                .then()
+                .statusCode(200)
+                .body("source", is("SUUNTO"))
+                .body("clientId", is("suunto-client-id"))
+                .body("seeded", is(true))
+                .body("clientSecret", is(nullValue()))
+                .body("subscriptionKey", is(nullValue()));
+
+        // Round-trip through the real JPA path (what the API client will call).
+        IntegrationCredential found = repo.findBySource(IntegrationSource.SUUNTO)
+                .orElseThrow(() -> new AssertionError("Credential not found after seed"));
+        assertEquals("suunto-client-id", found.getClientId());
+        assertEquals("suunto-client-secret", found.getClientSecret());
+        assertEquals(subscriptionKey, found.getApiSubscriptionKey());
+
+        // Encryption actually engaged at rest: the raw column value in PostgreSQL
+        // must NOT be the plaintext (a mocked or converter-less path would store
+        // it verbatim — exactly the failure #47 originally uncovered).
+        userTransaction.begin();
+        String rawStored = (String) em.createNativeQuery(
+                "SELECT api_subscription_key FROM integration_credentials WHERE source = 'SUUNTO'"
+        ).getSingleResult();
+        userTransaction.commit();
+        org.junit.jupiter.api.Assertions.assertNotEquals(subscriptionKey, rawStored);
+        org.junit.jupiter.api.Assertions.assertFalse(rawStored.contains(subscriptionKey),
+                "Raw stored value must not embed the plaintext subscription key");
+    }
+
+    @Test
+    void seedSuunto_existingBrokenRow_overwritesCleanlyWithoutThrowing() throws Exception {
+        // Plaintext row inserted behind the converter's back — the delete-then-
+        // insert upsert must replace it without ever attempting to decrypt it.
+        userTransaction.begin();
+        em.createNativeQuery(
+                "INSERT INTO integration_credentials (source, client_id, client_secret, api_subscription_key) " +
+                "VALUES ('SUUNTO', 'old-client-id', 'plaintext-secret', 'plaintext-subscription-key')"
+        ).executeUpdate();
+        userTransaction.commit();
+
+        given()
+                .header("X-Admin-Token", ADMIN_TOKEN)
+                .contentType("application/json")
+                .body("{\"clientId\":\"new-suunto-id\",\"clientSecret\":\"new-suunto-secret\","
+                        + "\"subscriptionKey\":\"new-subscription-key\"}")
+                .when().post("/admin/credentials/suunto")
+                .then()
+                .statusCode(200);
+
+        IntegrationCredential found = assertDoesNotThrow(
+                () -> repo.findBySource(IntegrationSource.SUUNTO)
+                        .orElseThrow(() -> new AssertionError("Credential not found after upsert")),
+                "Decryption of the newly-written credential must not throw"
+        );
+        assertEquals("new-suunto-id", found.getClientId());
+        assertEquals("new-suunto-secret", found.getClientSecret());
+        assertEquals("new-subscription-key", found.getApiSubscriptionKey());
+    }
+
+    @Test
+    void seedStrava_leavesSubscriptionKeyNull() {
+        // Guards the "Strava never has a subscription key" assumption: the
+        // existing Strava seed path must leave the new column NULL and the
+        // JPA read-back must return null without touching the converter.
+        given()
+                .header("X-Admin-Token", ADMIN_TOKEN)
+                .contentType("application/json")
+                .body("{\"clientId\":\"" + CLIENT_ID + "\",\"clientSecret\":\"" + CLIENT_SECRET + "\"}")
+                .when().post("/admin/credentials/strava")
+                .then()
+                .statusCode(200);
+
+        IntegrationCredential found = repo.findBySource(IntegrationSource.STRAVA)
+                .orElseThrow(() -> new AssertionError("Credential not found after seed"));
+        org.junit.jupiter.api.Assertions.assertNull(found.getApiSubscriptionKey());
+    }
+
+    @Test
+    void seedSuunto_missingSubscriptionKey_returns400() {
+        given()
+                .header("X-Admin-Token", ADMIN_TOKEN)
+                .contentType("application/json")
+                .body("{\"clientId\":\"suunto-client-id\",\"clientSecret\":\"suunto-client-secret\"}")
+                .when().post("/admin/credentials/suunto")
+                .then()
+                .statusCode(400)
+                .body("error", is("clientId, clientSecret and subscriptionKey are required"));
+    }
+
+    @Test
     void seedStrava_existingPlaintextRow_overwritesCleanlyWithoutThrowing() throws Exception {
         // Insert a plaintext value directly — replicates exactly the bug:
         // the old README instructed users to run a psql INSERT that bypasses @Convert.
