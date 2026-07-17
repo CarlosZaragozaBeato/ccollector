@@ -9,6 +9,7 @@ import org.jboss.logging.Logger;
 
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.UUID;
 
 @ApplicationScoped
 public class ComputeTrainingLoadJob extends AbstractStravaJob {
@@ -32,7 +33,7 @@ public class ComputeTrainingLoadJob extends AbstractStravaJob {
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
         String externalUserId = externalUserId(token);
         LocalDate targetDate = context.triggeredAt().atZone(ZoneOffset.UTC).toLocalDate();
-        Long athleteId = parseAthleteId(externalUserId);
+        UUID athleteId = resolveCanonicalAthleteId(externalUserId);
         trainingLoadService.computeAndUpsert(athleteId, targetDate);
         LOG.infof("ComputeTrainingLoadJob completed — user: '%s', date=%s", externalUserId, targetDate);
         return false;

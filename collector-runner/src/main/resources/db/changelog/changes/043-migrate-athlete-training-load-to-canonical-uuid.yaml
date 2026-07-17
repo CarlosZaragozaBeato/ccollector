@@ -1,0 +1,114 @@
+databaseChangeLog:
+  - changeSet:
+      id: 043-migrate-athlete-training-load-to-canonical-uuid
+      author: zensyra
+      comment: >
+        Migrates athlete_training_load.athlete_id from the Strava numeric BIGINT
+        (FK to athletes.strava_id) to the canonical UUID (FK to athlete_profiles.id).
+        The backfill JOIN uses integration_accounts, whose STRAVA rows already map
+        externalUserId (the old BIGINT as text) to the canonical athlete UUID.
+        Stored CTL/ATL/TSB values are NOT recomputed — they remain correct because
+        TrainingLoadService always recomputes the EMA from scratch over a 90-day window;
+        the stored values are reproducible snapshots of the source-independent computation.
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              -- 1. Add UUID column alongside the existing BIGINT column.
+              ALTER TABLE athlete_training_load
+                  ADD COLUMN athlete_uuid UUID;
+
+              -- 2. Backfill: resolve numeric athlete_id → canonical UUID via
+              --    integration_accounts (STRAVA rows map externalUserId = numeric id as text).
+              UPDATE athlete_training_load atl
+              SET    athlete_uuid = ia.athlete_id
+              FROM   integration_accounts ia
+              WHERE  ia.source = 'STRAVA'
+                 AND ia.external_user_id = atl.athlete_id::TEXT;
+
+              -- 3. Verify every row was backfilled before proceeding.
+              DO $$
+              DECLARE
+                  unresolved_count BIGINT;
+              BEGIN
+                  SELECT COUNT(*)
+                  INTO   unresolved_count
+                  FROM   athlete_training_load
+                  WHERE  athlete_uuid IS NULL;
+
+                  IF unresolved_count <> 0 THEN
+                      RAISE EXCEPTION
+                          'Migration 043 aborted: % athlete_training_load rows have no matching '
+                          'integration_account (STRAVA). Ensure migration 033 has run.',
+                          unresolved_count;
+                  END IF;
+              END $$;
+
+              -- 4. Drop old FK constraint, unique constraint, and index.
+              ALTER TABLE athlete_training_load
+                  DROP CONSTRAINT fk_athlete_training_load_athlete_id;
+              ALTER TABLE athlete_training_load
+                  DROP CONSTRAINT uq_athlete_training_load_athlete_date;
+              DROP INDEX IF EXISTS idx_athlete_training_load_athlete_date;
+
+              -- 5. Drop the old BIGINT column.
+              ALTER TABLE athlete_training_load
+                  DROP COLUMN athlete_id;
+
+              -- 6. Rename the new UUID column to athlete_id.
+              ALTER TABLE athlete_training_load
+                  RENAME COLUMN athlete_uuid TO athlete_id;
+
+              -- 7. Enforce NOT NULL.
+              ALTER TABLE athlete_training_load
+                  ALTER COLUMN athlete_id SET NOT NULL;
+
+              -- 8. Restore unique constraint and index on the UUID column.
+              ALTER TABLE athlete_training_load
+                  ADD CONSTRAINT uq_athlete_training_load_athlete_date
+                  UNIQUE (athlete_id, date);
+
+              CREATE INDEX idx_athlete_training_load_athlete_date
+                  ON athlete_training_load (athlete_id, date);
+
+              -- 9. Add FK to athlete_profiles.id (the canonical identity table).
+              ALTER TABLE athlete_training_load
+                  ADD CONSTRAINT fk_athlete_training_load_athlete_id
+                  FOREIGN KEY (athlete_id) REFERENCES athlete_profiles (id)
+                  ON DELETE RESTRICT;
+      rollback:
+        - sql:
+            splitStatements: false
+            sql: |
+              -- Reverse: restore BIGINT athlete_id keyed to athletes.strava_id.
+              ALTER TABLE athlete_training_load
+                  DROP CONSTRAINT IF EXISTS fk_athlete_training_load_athlete_id;
+              ALTER TABLE athlete_training_load
+                  DROP CONSTRAINT IF EXISTS uq_athlete_training_load_athlete_date;
+              DROP INDEX IF EXISTS idx_athlete_training_load_athlete_date;
+
+              ALTER TABLE athlete_training_load
+                  ADD COLUMN athlete_bigint BIGINT;
+
+              UPDATE athlete_training_load atl
+              SET    athlete_bigint = ia.external_user_id::BIGINT
+              FROM   integration_accounts ia
+              WHERE  ia.source = 'STRAVA'
+                 AND ia.athlete_id = atl.athlete_id;
+
+              ALTER TABLE athlete_training_load
+                  DROP COLUMN athlete_id;
+              ALTER TABLE athlete_training_load
+                  RENAME COLUMN athlete_bigint TO athlete_id;
+              ALTER TABLE athlete_training_load
+                  ALTER COLUMN athlete_id SET NOT NULL;
+
+              ALTER TABLE athlete_training_load
+                  ADD CONSTRAINT uq_athlete_training_load_athlete_date
+                  UNIQUE (athlete_id, date);
+              CREATE INDEX idx_athlete_training_load_athlete_date
+                  ON athlete_training_load (athlete_id, date);
+              ALTER TABLE athlete_training_load
+                  ADD CONSTRAINT fk_athlete_training_load_athlete_id
+                  FOREIGN KEY (athlete_id) REFERENCES athletes (strava_id)
+                  ON DELETE RESTRICT;

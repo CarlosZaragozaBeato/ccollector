@@ -114,13 +114,12 @@ class ActivityQueryPortWiringTest {
                 "Expected at least one TrainingLoadQueryPort bean to be discovered by CDI");
 
         List<TrainingLoadQueryPort> ports = trainingLoadQueryPorts.stream().toList();
-        // Deliberately still 1: #7 decided NOT to register a Suunto
-        // training-load port until the cross-source aggregation issue lands —
-        // a second one would feed non-deterministic data into the composer's
-        // putIfAbsent and the resource's first-port-wins loop. This assertion
-        // guards that decision.
+        // Permanently 1: the cross-source composition seam (DailyTssComposer +
+        // TrainingStressContributionPort) is the correct aggregation path. A second
+        // TrainingLoadQueryPort is neither planned nor correct — TSS aggregation
+        // happens upstream of the query port, not by registering multiple ports here.
         assertEquals(1, ports.size(),
-                "Expected exactly one TrainingLoadQueryPort implementation (Strava only, by design — see #7)");
+                "Expected exactly one TrainingLoadQueryPort implementation — TSS aggregation is handled by DailyTssComposer, not by multiple query ports");
         assertInstanceOf(StravaTrainingLoadQueryPort.class, ports.get(0));
     }
 

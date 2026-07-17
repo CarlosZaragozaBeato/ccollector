@@ -8,6 +8,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
+import java.util.UUID;
+
 /**
  * One-off, admin-triggered backfill that corrects historical training load with
  * the real intensity factor (#30).
@@ -17,9 +19,13 @@ import org.jboss.logging.Logger;
  * <ol>
  *   <li><b>Stage A</b> — populate {@code activity_metrics.intensity_factor} on
  *       historical rows that had normalized power but no IF, using the now-available
- *       FTP ({@link ActivityMetricsService#backfillIntensityFactors}).</li>
+ *       FTP ({@link ActivityMetricsService#backfillIntensityFactors}). This stage
+ *       still uses the Strava numeric id because it queries the strava-internal
+ *       {@code activities} table directly.</li>
  *   <li><b>Stage B</b> — recompute CTL/ATL/TSB for every existing daily row so the
- *       stored values reflect the corrected TSS ({@link TrainingLoadService#backfill}).</li>
+ *       stored values reflect the corrected TSS ({@link TrainingLoadService#backfill}).
+ *       This stage uses the canonical UUID because {@code athlete_training_load} is
+ *       now keyed by canonical UUID (migration 043).</li>
  * </ol>
  *
  * <p>The cron is a far-future sentinel so the scheduler never fires it
@@ -52,10 +58,11 @@ public class BackfillTrainingLoadJob extends AbstractStravaJob {
     @Override
     protected boolean executeForToken(OAuthToken token, SyncContext context) {
         String externalUserId = externalUserId(token);
-        Long athleteId = parseAthleteId(externalUserId);
+        Long stravaAthleteId = parseAthleteId(externalUserId);
+        UUID canonicalAthleteId = resolveCanonicalAthleteId(externalUserId);
 
-        int ifPopulated = activityMetricsService.backfillIntensityFactors(athleteId);
-        int rowsRecomputed = trainingLoadService.backfill(athleteId);
+        int ifPopulated = activityMetricsService.backfillIntensityFactors(stravaAthleteId);
+        int rowsRecomputed = trainingLoadService.backfill(canonicalAthleteId);
 
         LOG.infof("BackfillTrainingLoadJob completed — user: '%s', IF populated on %d rows, "
                 + "%d daily training-load rows recomputed", externalUserId, ifPopulated, rowsRecomputed);

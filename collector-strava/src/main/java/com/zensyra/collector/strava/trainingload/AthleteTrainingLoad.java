@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Entity
 @Table(name = "athlete_training_load")
@@ -15,7 +16,7 @@ public class AthleteTrainingLoad extends PanacheEntityBase {
     private Long id;
 
     @Column(name = "athlete_id", nullable = false)
-    private Long athleteId;
+    private UUID athleteId;
 
     @Column(name = "date", nullable = false)
     private LocalDate date;
@@ -52,8 +53,8 @@ public class AthleteTrainingLoad extends PanacheEntityBase {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public Long getAthleteId() { return athleteId; }
-    public void setAthleteId(Long athleteId) { this.athleteId = athleteId; }
+    public UUID getAthleteId() { return athleteId; }
+    public void setAthleteId(UUID athleteId) { this.athleteId = athleteId; }
 
     public LocalDate getDate() { return date; }
     public void setDate(LocalDate date) { this.date = date; }

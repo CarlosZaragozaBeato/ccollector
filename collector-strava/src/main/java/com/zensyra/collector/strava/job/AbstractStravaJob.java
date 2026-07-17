@@ -121,4 +121,12 @@ public abstract class AbstractStravaJob implements SyncJob {
             throw new IllegalStateException("Invalid externalUserId (not a number): " + externalUserId, e);
         }
     }
+
+    protected UUID resolveCanonicalAthleteId(String externalUserId) {
+        return integrationAccountRepository
+                .findBySourceAndExternalUserId(IntegrationSource.STRAVA, externalUserId)
+                .map(IntegrationAccount::getAthleteId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "No canonical athlete found for Strava user: " + externalUserId));
+    }
 }
