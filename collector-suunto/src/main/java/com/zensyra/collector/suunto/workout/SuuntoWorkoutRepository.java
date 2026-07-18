@@ -29,6 +29,10 @@ public class SuuntoWorkoutRepository implements PanacheRepository<SuuntoWorkout>
         return Optional.ofNullable(max);
     }
 
+    public List<SuuntoWorkout> findByUserAndDateRange(String suuntoUser, Instant from, Instant to) {
+        return list("suuntoUser = ?1 and startDate >= ?2 and startDate < ?3", suuntoUser, from, to);
+    }
+
     // Same dynamic-filter shape as collector-strava's
     // ActivityRepository.findPagedByAthleteId, keyed by the Suunto user string.
     public List<SuuntoWorkout> findPagedByUser(
