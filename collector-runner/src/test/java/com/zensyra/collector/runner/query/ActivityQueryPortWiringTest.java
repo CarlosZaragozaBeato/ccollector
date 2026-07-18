@@ -8,6 +8,7 @@ import com.zensyra.collector.query.port.BestEffortQueryPort;
 import com.zensyra.collector.query.port.TrainingLoadQueryPort;
 import com.zensyra.collector.strava.identity.StravaActivityMetricsQueryPort;
 import com.zensyra.collector.strava.identity.StravaActivityQueryPort;
+import com.zensyra.collector.suunto.identity.SuuntoActivityMetricsQueryPort;
 import com.zensyra.collector.strava.identity.StravaAthleteStatsQueryPort;
 import com.zensyra.collector.strava.identity.StravaBestEffortQueryPort;
 import com.zensyra.collector.strava.identity.StravaTrainingLoadQueryPort;
@@ -76,14 +77,17 @@ class ActivityQueryPortWiringTest {
     }
 
     @Test
-    void shouldDiscoverTheStravaActivityMetricsQueryPortAsACdiBean() {
+    void shouldDiscoverBothActivityMetricsQueryPortAdaptersAsCdiBeans() {
         assertFalse(activityMetricsQueryPorts.isUnsatisfied(),
-                "Expected at least one ActivityMetricsQueryPort bean to be discovered by CDI");
+                "Expected ActivityMetricsQueryPort beans to be discovered by CDI");
 
         List<ActivityMetricsQueryPort> ports = activityMetricsQueryPorts.stream().toList();
-        assertEquals(1, ports.size(),
-                "Expected exactly one ActivityMetricsQueryPort implementation today (Strava only)");
-        assertInstanceOf(StravaActivityMetricsQueryPort.class, ports.get(0));
+        assertEquals(2, ports.size(),
+                "Expected exactly the Strava and Suunto ActivityMetricsQueryPort implementations");
+        assertTrue(ports.stream().anyMatch(p -> p instanceof StravaActivityMetricsQueryPort),
+                "StravaActivityMetricsQueryPort must be registered");
+        assertTrue(ports.stream().anyMatch(p -> p instanceof SuuntoActivityMetricsQueryPort),
+                "SuuntoActivityMetricsQueryPort must be registered");
     }
 
     @Test
@@ -114,12 +118,13 @@ class ActivityQueryPortWiringTest {
                 "Expected at least one TrainingLoadQueryPort bean to be discovered by CDI");
 
         List<TrainingLoadQueryPort> ports = trainingLoadQueryPorts.stream().toList();
-        // Permanently 1: the cross-source composition seam (DailyTssComposer +
-        // TrainingStressContributionPort) is the correct aggregation path. A second
-        // TrainingLoadQueryPort is neither planned nor correct — TSS aggregation
-        // happens upstream of the query port, not by registering multiple ports here.
+        // Exactly 1 by design — the single neutral StravaTrainingLoadQueryPort reads from
+        // the UUID-keyed athlete_training_load table, which already aggregates all sources'
+        // TSS via DailyTssComposer upstream. A second TrainingLoadQueryPort must never be
+        // registered: RacePerformanceComposer's putIfAbsent is only safe because exactly
+        // one port exists; cross-source summing happens in DailyTssComposer, not here.
         assertEquals(1, ports.size(),
-                "Expected exactly one TrainingLoadQueryPort implementation — TSS aggregation is handled by DailyTssComposer, not by multiple query ports");
+                "TrainingLoadQueryPort must have exactly one implementation — TSS aggregation is DailyTssComposer's responsibility, not multiple query ports");
         assertInstanceOf(StravaTrainingLoadQueryPort.class, ports.get(0));
     }
 

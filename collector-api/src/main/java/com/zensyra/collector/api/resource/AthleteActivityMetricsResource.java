@@ -13,6 +13,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Path("/api/v1/athletes/{athleteId}/activity-metrics")
@@ -32,21 +33,18 @@ public class AthleteActivityMetricsResource {
             return ApiResponses.error(Response.Status.BAD_REQUEST, "activityId is required");
         }
 
-        // No dedicated composer exists yet for this port — unlike
-        // ActivityQueryPort, which the composer merges across sources,
-        // a single canonical activity has at most one metrics row per
-        // source today, and there is no conflict-resolution policy defined
-        // for what happens once a second source can also report metrics
-        // for the same activity (see ADR-002 addendum). Taking the first
-        // registered port is the correct N=1 behavior until that policy
-        // exists; it must not be mistaken for "this port never needs a
-        // composer."
+        // Try each registered port in CDI iteration order; return the first hit.
+        // A canonical activity id exists in exactly one source, so at most one
+        // port will return a non-empty result. No conflict-resolution policy is
+        // defined for the case where two sources claim the same activityId (see
+        // ADR-002 addendum) — if that ever happens the result is non-deterministic
+        // by design, accepted until physical-session dedup (ADR-002) is resolved.
         for (ActivityMetricsQueryPort port : activityMetricsQueryPorts) {
-            return port.getByActivityId(athleteId, activityId)
-                    .map(ActivityMetricsDto::from)
-                    .map(dto -> Response.ok(dto).build())
-                    .orElseGet(() -> ApiResponses.error(Response.Status.NOT_FOUND,
-                            "no activity metrics found for activity " + activityId));
+            Optional<com.zensyra.collector.query.model.ActivityMetrics> result =
+                    port.getByActivityId(athleteId, activityId);
+            if (result.isPresent()) {
+                return Response.ok(ActivityMetricsDto.from(result.get())).build();
+            }
         }
 
         return ApiResponses.error(Response.Status.NOT_FOUND,

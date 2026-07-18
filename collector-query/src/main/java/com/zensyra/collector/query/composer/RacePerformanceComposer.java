@@ -114,8 +114,12 @@ public class RacePerformanceComposer {
         Map<LocalDate, TrainingLoad> loadByDate = new HashMap<>();
         for (TrainingLoadQueryPort port : trainingLoadPorts) {
             for (TrainingLoad load : port.listRecentByAthlete(athleteId, loadFrom)) {
-                // One row per (athlete, date); if two sources ever collide on a
-                // date, the first registered source wins deterministically.
+                // One row per (athlete, date). No collision is possible today
+                // because exactly one TrainingLoadQueryPort is registered —
+                // TSS aggregation across sources happens upstream in
+                // DailyTssComposer, so each row already holds the combined
+                // daily load. If a second TrainingLoadQueryPort were ever
+                // registered, this composer's logic would need revisiting.
                 loadByDate.putIfAbsent(load.date(), load);
             }
         }
